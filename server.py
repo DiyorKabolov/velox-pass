@@ -12,7 +12,7 @@ if __name__ == "__main__":
     port = int(os.getenv("FLASK_PORT", "5000"))
     debug = os.getenv("FLASK_DEBUG", "0") == "1"
 
-    if os.getenv("ENABLE_NGROK", "0") == "1":
+    if os.getenv("ENABLE_NGROK", "1") == "1":
         try:
             public_url = ngrok.connect(port)
             print("Public URL:", public_url)
