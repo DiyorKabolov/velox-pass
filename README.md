@@ -1,108 +1,14 @@
-# SC Tickets
-
-SC Tickets - Flask-приложение для управления мероприятиями, продажи и проверки QR-билетов.
-
-## Что умеет проект
-
-- регистрация и подтверждение email;
-- авторизация и личный кабинет пользователя;
-- список мероприятий с фильтрацией и карточками событий;
-- покупка билетов с контролем вместимости;
-- генерация PDF-билета с QR-кодом;
-- админ-панель для управления событиями, пользователями и билетами;
-- сканер QR-кодов для отметки билета как использованного;
-- API для афиши и создания событий.
-
-## Точка входа
-
-- `server.py` - запуск Flask-приложения;
-- `app/__init__.py` - сборка приложения и общие настройки;
-- `app/database.py` - SQLite-слой и бизнес-логика хранения;
-- `app/auth.py` - регистрация, вход, подтверждение email;
-- `app/events.py` - афиша, покупка билетов, кабинет, API;
-- `app/admin.py` - админские маршруты;
-- `app/ticket.py` - генерация PDF-билетов;
-- `app/mail.py` - отправка кода подтверждения по SMTP.
-
-## Требования
-
-- Python 3.11+;
-- Gmail или другой SMTP-сервер для отправки кодов подтверждения;
-- Node.js 18+ - только если нужен React-прототип из `static/spa-react`.
-
-## Установка
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-Copy-Item .env.example .env
-```
-
-Заполните `.env`:
-
-- `SECRET_KEY` - ключ Flask-сессий;
-- `DB_PATH` - путь к SQLite-базе данных, если нужен нестандартный;
-- `MAIL_FROM` - адрес отправителя;
-- `MAIL_PASSWORD` - пароль или app password SMTP;
-- `MAIL_HOST` - SMTP-хост, по умолчанию `smtp.gmail.com`;
-- `MAIL_PORT` - SMTP-порт, по умолчанию `465`;
-- `MAIL_USE_SSL` - `1` для SSL, `0` для STARTTLS;
-- `FLASK_HOST` - адрес запуска, по умолчанию `127.0.0.1`;
-- `FLASK_PORT` - порт запуска, по умолчанию `5000`;
-- `FLASK_DEBUG` - `1` для режима отладки;
-- `SESSION_COOKIE_SECURE` - `1` при запуске за HTTPS;
-- `VERIFY_TOKEN_TTL_MINUTES` - срок действия кода подтверждения;
-- `VERIFY_MAX_ATTEMPTS` - максимальное число попыток ввода кода;
-- `MAX_CONTENT_LENGTH` - максимальный размер загрузок;
-- `ENABLE_NGROK` - `1`, если нужен публичный URL через ngrok.
-
-## Запуск
-
-```powershell
-python server.py
-```
-
-По умолчанию приложение будет доступно на `http://127.0.0.1:5000`.
-
-## Админ-доступ
-
-1. Зарегистрируйте обычного пользователя.
-2. Назначьте ему роль администратора:
-
-```powershell
-python scripts/make_admin.py user@example.com
-```
-
-3. Войдите в аккаунт и откройте `/admin`.
-
-## Структура проекта
-
-- `templates/` - Jinja-шаблоны для основного интерфейса;
-- `static/` - статика, загруженные изображения и материалы;
-- `static/spa-react/` - React-прототип и Vite-сборка;
-- `assets/ticket_templates/` - PDF-шаблоны билетов;
-- `Generated_tickets/` - сгенерированные PDF-билеты;
-- `scripts/` - вспомогательные утилиты и проверки.
-
-## Как работает билет
-
-- при покупке создается уникальный `ticket_id`;
-- билет сохраняется в SQLite и PDF генерируется в `Generated_tickets/`;
-- если у события есть свой PDF-шаблон, он используется как основа;
-- QR-код содержит только идентификатор билета;
-- сканер в `/admin/scan` помечает билет как использованный.
-
-## Полезные замечания
-
-- `Generated_tickets/`, `tickets.db`, `.env`, `__pycache__/` и загруженные файлы не должны попадать в git;
-- шаблоны билетов принимаются только в формате PDF;
-- обложки событий поддерживают PNG, JPG, JPEG и WebP;
-- проект рассчитан на локальный запуск, но его можно вынести за reverse proxy.
-
-## Дальнейшее развитие
-
-- подключить миграции вместо ручного `ALTER TABLE`;
-- добавить автотесты для регистрации, покупки билета и сканирования;
-- привести React-прототип к полноценному production-режиму;
-- вынести SMTP и файловое хранилище в отдельный конфиг-слой.
+# SC Tickets v2
+ 
+Electronic ticketing system built with FastAPI + React + PostgreSQL.
+ 
+## Stack
+- **Backend**: FastAPI, SQLAlchemy, PostgreSQL, JWT
+- **Frontend**: React 18, Vite, TanStack Query, Zustand, Tailwind CSS
+ 
+## Structure
+- `backend/` — FastAPI REST API
+- `frontend/` — React SPA
+ 
+## Status
+🚧 In development
