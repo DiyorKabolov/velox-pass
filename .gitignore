@@ -1,5 +1,5 @@
 # Python
-**pycache**/
+__pycache__/
 *.pyc
 *.pyo
 .venv/
@@ -21,6 +21,7 @@ mail.py
 node_modules/
 dist/
 .next/
+.vite/
 
 # IDE
 .vscode/

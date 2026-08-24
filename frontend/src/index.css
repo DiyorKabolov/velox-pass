@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #1a1c1e;
+  --surface: #22252a;
+  --surface2: #2a2e34;
+  --border: #32373f;
+  --border2: #42484f;
+  --text: #e8e6e0;
+  --muted: #7a7f88;
+  --muted2: #52575f;
+  --accent: #a8b8c8;
+  --accent-dim: rgba(168, 184, 200, 0.08);
+  --ok: #4ade80;
+  --ok-bg: rgba(74, 222, 128, 0.08);
+  --err: #f87171;
+  --err-bg: rgba(248, 113, 113, 0.08);
+  --warn: #fbbf24;
+  --card-bg: #fdfdf5;
+  --card-text: #2a2a2a;
+  --card-accent: #a898e0;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Manrope', sans-serif;
+  min-height: 100dvh;
+}
+
+@layer base {
+  h1, h2, h3 {
+    font-family: 'Unbounded', sans-serif;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--bg);
+  }
+}
+
+@layer utilities {
+  .font-display { font-family: 'Unbounded', sans-serif; }
+  .font-mono2 { font-family: 'JetBrains Mono', monospace; }
+}
+
+/* Scrollbar tuned to the dark surface palette. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border2); }

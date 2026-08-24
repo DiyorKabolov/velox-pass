@@ -1,0 +1,90 @@
+import { useQuery } from '@tanstack/react-query'
+import { CalendarDays, CheckCircle2, Ticket, Users, Wallet } from 'lucide-react'
+import { getAdminEvents, getStats } from '../../api/admin'
+import { formatShortDate } from '../../utils/dates'
+import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
+
+function StatCard({ icon: Icon, label, value }) {
+  return (
+    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <div className="flex items-center gap-2 text-[var(--muted)]">
+        <Icon size={15} className="text-[var(--accent)]" />
+        <span className="font-mono2 text-[10px] uppercase tracking-[0.14em]">
+          {label}
+        </span>
+      </div>
+      <p className="mt-3 font-display text-2xl tracking-tight">{value}</p>
+    </div>
+  )
+}
+
+export default function Dashboard() {
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['admin', 'stats'],
+    queryFn: getStats,
+  })
+  const { data: events } = useQuery({
+    queryKey: ['admin', 'events'],
+    queryFn: getAdminEvents,
+  })
+
+  const cards = [
+    { icon: Users, label: 'Users', value: stats?.users ?? 0 },
+    { icon: CalendarDays, label: 'Events', value: stats?.events ?? 0 },
+    { icon: Ticket, label: 'Tickets', value: stats?.tickets ?? 0 },
+    { icon: CheckCircle2, label: 'Scanned', value: stats?.tickets_used ?? 0 },
+    {
+      icon: Wallet,
+      label: 'Revenue',
+      value: (stats?.revenue ?? 0).toFixed(2),
+    },
+  ]
+
+  return (
+    <AdminLayout title="Dashboard" subtitle="System-wide numbers at a glance.">
+      <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {cards.map((card) => (
+          <StatCard
+            key={card.label}
+            icon={card.icon}
+            label={card.label}
+            value={isLoading ? '—' : card.value}
+          />
+        ))}
+      </div>
+
+      <h2 className="mb-4 font-display text-base">Recent events</h2>
+      <TableShell>
+        <thead>
+          <tr>
+            <Th>Title</Th>
+            <Th>Date</Th>
+            <Th>Location</Th>
+            <Th className="text-right">Sold</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {events?.slice(0, 10).map((event) => (
+            <tr key={event.id} className="hover:bg-[var(--surface)]">
+              <Td>{event.title}</Td>
+              <Td className="font-mono2 text-xs text-[var(--muted)]">
+                {formatShortDate(event.date)}
+              </Td>
+              <Td className="text-[var(--muted)]">{event.location || '—'}</Td>
+              <Td className="text-right font-mono2 text-xs">
+                {event.tickets_sold} / {event.capacity || '∞'}
+              </Td>
+            </tr>
+          ))}
+          {events?.length === 0 && (
+            <tr>
+              <Td className="text-center text-[var(--muted)]" colSpan={4}>
+                No events yet.
+              </Td>
+            </tr>
+          )}
+        </tbody>
+      </TableShell>
+    </AdminLayout>
+  )
+}

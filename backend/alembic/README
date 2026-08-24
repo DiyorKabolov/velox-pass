@@ -1,0 +1,8 @@
+Alembic migrations for Velox Pass.
+
+The database URL comes from backend/.env via app.core.config, so alembic.ini
+does not hardcode credentials. Run every command from the backend/ directory.
+
+    alembic revision --autogenerate -m "describe the change"
+    alembic upgrade head
+    alembic downgrade -1
