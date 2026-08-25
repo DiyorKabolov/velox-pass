@@ -5,17 +5,64 @@
 - Node.js 18+
 - PostgreSQL 18 (local)
 
-## Backend
+## Install
 
 ```bash
 cd backend
 pip install -r requirements.txt
 python create_db.py
-python main.py
+```
+
+```bash
+cd frontend
+npm install
 ```
 
 `create_db.py` creates the `velox_pass` database, all tables and the default
-superadmin. It is safe to re-run — existing data is left alone.
+superadmin. It is safe to re-run — existing data is left alone. Run it before
+the first `python main.py`, otherwise every request that touches the database
+fails with a 500.
+
+## Starting the app
+
+### One command (Windows)
+
+Double-click `start.bat` in the project root, or run it from a terminal:
+
+```
+start.bat
+```
+
+It opens two windows — one for the backend, one for the frontend — and checks
+first that `npm install` has already been run. Closing a window (or Ctrl+C in
+it) stops that half; the other keeps running.
+
+### Or manually, in two terminals
+
+Terminal 1 (backend):
+
+```bash
+cd backend
+python main.py
+```
+
+Terminal 2 (frontend):
+
+```bash
+cd frontend
+npm run dev
+```
+
+Either way both processes keep running until you stop them, and the order does
+not matter — Vite only calls the backend when the browser makes a request.
+
+The ngrok tunnel exposes the backend API publicly for QR scanner access from
+mobile devices. Only port 8000 is tunnelled, so the public ngrok URL serves the
+API and `/docs`, never the site. **The site itself is at
+http://localhost:5173.**
+
+Free ngrok accounts allow a single tunnel, so run only one backend at a time —
+a second `python main.py` fails with `ERR_NGROK_334`.
 
 ### Database credentials
 
@@ -30,13 +77,30 @@ put your real local PostgreSQL password in that URL and run it again.
 
 ### ngrok
 
-`python main.py` opens an ngrok tunnel on port 8000 and prints the public URL.
-Without an ngrok auth token the tunnel is skipped and the API still serves
-locally — the startup banner says which happened. Add a token once with:
+`python main.py` opens an ngrok tunnel on port 8000, prints the public URL and
+then starts uvicorn on `0.0.0.0:8000`. The tunnel covers the FastAPI backend
+only, so a phone off the local network can still reach the API to scan tickets.
+
+The startup banner looks like this:
+
+```
+🎟  Velox Pass API
+📡  Public URL: https://<subdomain>.ngrok-free.dev
+📖  Docs: https://<subdomain>.ngrok-free.dev/docs
+🔧  Local: http://localhost:8000
+```
+
+An auth token is required — without one `ngrok.connect()` raises and the server
+does not start. Add it once with:
 
 ```bash
 ngrok config add-authtoken <your-token>
 ```
+
+The public URL changes on every restart unless you have a reserved domain.
+CORS already accepts any `*.ngrok-free.app`, `*.ngrok.app` or `*.ngrok.io`
+origin alongside the two localhost ports, so no config change is needed when it
+rotates.
 
 ### Migrations
 
@@ -48,13 +112,7 @@ alembic revision --autogenerate -m "describe the change"
 alembic upgrade head
 ```
 
-## Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## Frontend proxy
 
 Vite proxies `/api/*` to `http://localhost:8000`, so the browser only ever
 talks to port 5173 in development.

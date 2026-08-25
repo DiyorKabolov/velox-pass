@@ -4,7 +4,15 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+.pytest_cache/
+
+# Secrets - every .env variant, but keep the value-less template
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+ngrok.yml
 
 # Database
 *.db
@@ -13,6 +21,7 @@ venv/
 # Generated files
 Generated_tickets/
 qr_ticket.png
+*.log
 
 # Sensitive
 mail.py
