@@ -32,6 +32,7 @@ export default function Button({
       className={[
         'inline-flex items-center justify-center gap-2 rounded-[var(--radius-sm)]',
         'font-medium tracking-wide transition-all duration-150',
+        'active:scale-[0.96] disabled:active:scale-100',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]',
         'disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:brightness-100',
         VARIANTS[variant] ?? VARIANTS.primary,

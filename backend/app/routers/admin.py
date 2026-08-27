@@ -83,6 +83,15 @@ async def delete_event(event_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(event)
 
 
+@router.get("/scanners", response_model=list[UserOut])
+async def admin_scanners(db: AsyncSession = Depends(get_db)):
+    """Everyone who can operate the scanner page."""
+    result = await db.execute(
+        select(User).where(User.role == "scanner").order_by(User.username)
+    )
+    return list(result.scalars().all())
+
+
 @router.get("/users", response_model=list[UserOut])
 async def admin_users(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).order_by(User.created_at.desc()))

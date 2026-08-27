@@ -17,15 +17,18 @@ function tabClass({ isActive }) {
 }
 
 /** Shared shell for the admin screens: title, tab strip and content slot. */
-export default function AdminLayout({ title, subtitle, children }) {
+export default function AdminLayout({ title, subtitle, action, children }) {
   return (
     <div className="mx-auto max-w-6xl px-5 py-12">
-      <header className="mb-8">
-        <p className="font-mono2 text-[11px] uppercase tracking-[0.24em] text-[var(--muted2)]">
-          Administration
-        </p>
-        <h1 className="mt-2 font-display text-2xl tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-2 text-sm text-[var(--muted)]">{subtitle}</p>}
+      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-mono2 text-[11px] uppercase tracking-[0.24em] text-[var(--muted2)]">
+            Administration
+          </p>
+          <h1 className="mt-2 font-display text-2xl tracking-tight">{title}</h1>
+          {subtitle && <p className="mt-2 text-sm text-[var(--muted)]">{subtitle}</p>}
+        </div>
+        {action}
       </header>
 
       <nav className="mb-8 flex flex-wrap gap-1 border-b border-[var(--border)] pb-3">

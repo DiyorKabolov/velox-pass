@@ -25,9 +25,15 @@ class Settings(BaseSettings):
     MAIL_FROM: str = ""
     MAIL_PASSWORD: str = ""
     SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
+    # Implicit TLS (SMTP_SSL), which is what Gmail expects on 465.
+    SMTP_PORT: int = 465
 
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    # ngrok. A static domain keeps one public address across restarts, so
+    # browser sessions survive; leave it empty for a random ngrok URL.
+    NGROK_DOMAIN: str = ""
+    NGROK_AUTH_TOKEN: str = ""
 
     @property
     def sync_database_url(self) -> str:

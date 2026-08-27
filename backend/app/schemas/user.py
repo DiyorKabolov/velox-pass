@@ -10,9 +10,10 @@ class UserCreate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    """Login accepts either the username or the email in `login`."""
+    """Sign-in payload. `email` also accepts a username, so existing
+    username-based accounts keep working."""
 
-    login: str
+    email: str
     password: str
 
 
@@ -34,6 +35,10 @@ class UserRoleUpdate(BaseModel):
 class VerifyRequest(BaseModel):
     email: EmailStr
     code: str = Field(min_length=6, max_length=6)
+
+
+class ResendRequest(BaseModel):
+    email: EmailStr
 
 
 class Token(BaseModel):

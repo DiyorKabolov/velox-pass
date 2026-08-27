@@ -25,7 +25,7 @@ export default function Cabinet() {
           {Array.from({ length: 3 }).map((_, index) => (
             <div
               key={index}
-              className="h-[330px] w-[300px] animate-pulse rounded-[var(--radius)] bg-[var(--surface)]"
+              className="h-[210px] w-full max-w-[520px] animate-pulse rounded-[18px] bg-[var(--surface)]"
             />
           ))}
         </div>

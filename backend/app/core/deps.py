@@ -1,6 +1,6 @@
 """Shared FastAPI dependencies for authentication and role checks."""
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,13 +9,21 @@ from app.core.security import verify_token
 from app.models.user import User
 from app.models.user_venue_role import UserVenueRole
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+# HTTPBearer, not OAuth2PasswordBearer: the login endpoint takes a JSON body,
+# so Swagger's OAuth2 password form cannot drive it. This renders a single
+# "paste your token" field instead, and Swagger adds the "Bearer " prefix.
+bearer_scheme = HTTPBearer(
+    scheme_name="BearerAuth",
+    bearerFormat="JWT",
+    description="Paste the access_token returned by /api/auth/login.",
+    auto_error=False,
+)
 
 ROLE_RANK = {"user": 0, "scanner": 1, "venue_admin": 2, "superadmin": 3}
 
 
 async def get_current_user(
-    token: str | None = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     credentials_error = HTTPException(
@@ -23,10 +31,12 @@ async def get_current_user(
         detail="Not authenticated",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    if not token:
+    # HTTPBearer already split "Bearer <token>"; it yields None when the header
+    # is missing or does not use the bearer scheme.
+    if credentials is None:
         raise credentials_error
 
-    user_id = verify_token(token)
+    user_id = verify_token(credentials.credentials)
     if user_id is None:
         raise credentials_error
 
@@ -65,6 +75,11 @@ def require_min_rank(minimum: str):
 require_superadmin = require_role("superadmin")
 require_staff = require_min_rank("venue_admin")
 require_scanner = require_min_rank("scanner")
+
+# Explicit role gates used by the routers. Both accept superadmin, which sits
+# above every other role in ROLE_RANK.
+get_current_scanner = require_role("scanner")
+get_current_venue_admin = require_role("venue_admin")
 
 
 async def user_venue_ids(db: AsyncSession, user: User) -> list[int]:

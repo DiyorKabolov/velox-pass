@@ -1,4 +1,5 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { getMe } from '../api/auth'
 import useAuthStore from '../store/authStore'
 
 /** Auth state plus the derived role flags the routes and navbar need. */
@@ -23,6 +24,34 @@ export function useAuth() {
     }),
     [user, token, setAuth, setUser, logout],
   )
+}
+
+/**
+ * Pulls a fresh copy of the signed-in user from the API once per mount.
+ *
+ * The user object lives in localStorage, so without this a role granted by an
+ * admin would not reach the browser until the person signed out and back in:
+ * reloading the page just re-reads the stale copy.
+ */
+export function useSyncUser() {
+  const token = useAuthStore((s) => s.token)
+  const setUser = useAuthStore((s) => s.setUser)
+
+  useEffect(() => {
+    if (!token) return undefined
+    let cancelled = false
+
+    getMe()
+      .then((fresh) => {
+        if (!cancelled) setUser(fresh)
+      })
+      // A 401 is already handled by the axios interceptor, which signs out.
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [token, setUser])
 }
 
 export default useAuth

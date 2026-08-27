@@ -65,3 +65,34 @@ export function relativeTime(value) {
   const plural = amount === 1 ? '' : 's'
   return diff >= 0 ? `in ${amount} ${unit}${plural}` : `${amount} ${unit}${plural} ago`
 }
+
+/** "2026-05-15" — local calendar date, not UTC. */
+export function formatIsoDate(value) {
+  const date = toDate(value)
+  if (!date) return '—'
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** "01.12.2026 20:00" — the format used on the ticket card. */
+export function formatDateTime(value) {
+  const date = toDate(value)
+  if (!date) return '—'
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** "2026-09-06T14:49" — the shape <input type="datetime-local"> expects. */
+export function toDatetimeLocal(value) {
+  const date = toDate(value)
+  if (!date) return ''
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  )
+}
+
+/** datetime-local (local time, no zone) back to an ISO string for the API. */
+export function fromDatetimeLocal(value) {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}

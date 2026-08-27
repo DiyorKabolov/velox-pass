@@ -10,7 +10,7 @@ import Input from '../components/ui/Input'
 export default function Login() {
   const navigate = useNavigate()
   const { setAuth } = useAuth()
-  const [form, setForm] = useState({ login: '', password: '' })
+  const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
 
   const update = (event) =>
@@ -20,7 +20,7 @@ export default function Login() {
     event.preventDefault()
     setLoading(true)
     try {
-      const data = await loginRequest(form.login, form.password)
+      const data = await loginRequest(form.email, form.password)
       setAuth(data.user, data.access_token)
       toast.success(`Welcome back, ${data.user.username}`)
       navigate('/')
@@ -29,7 +29,7 @@ export default function Login() {
       toast.error(message)
       // An unconfirmed account should land on the code screen, not stay stuck.
       if (message.toLowerCase().includes('not confirmed')) {
-        navigate('/confirm', { state: { email: form.login } })
+        navigate('/confirm', { state: { email: form.email } })
       }
     } finally {
       setLoading(false)
@@ -49,10 +49,10 @@ export default function Login() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             label="Username or email"
-            name="login"
+            name="email"
             autoComplete="username"
             placeholder="admin@veloxpass.com"
-            value={form.login}
+            value={form.email}
             onChange={update}
             required
           />

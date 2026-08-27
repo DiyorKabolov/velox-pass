@@ -27,6 +27,10 @@ class Ticket(Base):
         ForeignKey("sessions.id", ondelete="SET NULL"), index=True, nullable=True
     )
     used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Set the moment a scanner burns the ticket; None while unused.
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     price_paid: Mapped[float] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

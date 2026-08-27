@@ -13,6 +13,7 @@ class TicketOut(BaseModel):
     seat_id: int | None
     session_id: int | None
     used: bool
+    used_at: datetime | None = None
     price_paid: float
     created_at: datetime
 
@@ -37,6 +38,10 @@ class ScanRequest(BaseModel):
 
 
 class ScanResult(BaseModel):
+    """Scanner verdict. `ok` is true only on the first valid scan."""
+
+    ok: bool
     status: str  # ok | used | expired | invalid
     message: str
+    used_at: datetime | None = None
     ticket: TicketOut | None = None

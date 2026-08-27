@@ -3,7 +3,7 @@
 Modern electronic ticketing system with seat selection, venue management, and role-based access.
 
 ## Stack
-- **Backend**: FastAPI, SQLAlchemy, PostgreSQL, JWT, ngrok
+- **Backend**: FastAPI, SQLAlchemy, PostgreSQL, JWT, ngrok (static domain)
 - **Frontend**: React 18, Vite, TanStack Query, Zustand, Tailwind CSS
 
 ## Features
@@ -38,7 +38,7 @@ backend/
     services/   auth, ticket and mail logic
   alembic/      migrations
   create_db.py  database + superadmin bootstrap
-  main.py       app entry point with ngrok tunnel
+  main.py       app entry point with the ngrok tunnel
 
 frontend/
   src/

@@ -10,20 +10,6 @@ export async function getAdminEvents() {
   return data
 }
 
-export async function createEvent(payload) {
-  const { data } = await client.post('/admin/events', payload)
-  return data
-}
-
-export async function updateEvent(id, payload) {
-  const { data } = await client.patch(`/admin/events/${id}`, payload)
-  return data
-}
-
-export async function deleteEvent(id) {
-  await client.delete(`/admin/events/${id}`)
-}
-
 export async function getUsers() {
   const { data } = await client.get('/admin/users')
   return data

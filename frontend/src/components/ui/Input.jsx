@@ -19,7 +19,8 @@ export default function Input({
         className={[
           'w-full rounded-[var(--radius-sm)] bg-[var(--surface2)] px-3.5 py-2.5',
           'text-[var(--text)] placeholder:text-[var(--muted2)]',
-          'border transition-colors duration-150 outline-none',
+          'border transition-all duration-150 outline-none',
+          'focus:ring-2 focus:ring-[var(--accent)]/25',
           error
             ? 'border-[var(--err)]'
             : 'border-[var(--border)] focus:border-[var(--accent)]',

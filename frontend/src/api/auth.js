@@ -1,8 +1,8 @@
 import client from './client'
 
-export async function login(loginValue, password) {
+export async function login(emailOrUsername, password) {
   const { data } = await client.post('/auth/login', {
-    login: loginValue,
+    email: emailOrUsername,
     password,
   })
   return data

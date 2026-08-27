@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Navbar from './components/layout/Navbar'
 import Footer from './components/layout/Footer'
-import useAuth from './hooks/useAuth'
+import useAuth, { useSyncUser } from './hooks/useAuth'
 import Cabinet from './pages/Cabinet'
 import Confirm from './pages/Confirm'
 import EventDetail from './pages/EventDetail'
@@ -9,8 +9,10 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 import Register from './pages/Register'
+import Scanner from './pages/Scanner'
 import Dashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
+import AdminEventForm from './pages/admin/EventForm'
 import AdminTickets from './pages/admin/Tickets'
 import AdminUsers from './pages/admin/Users'
 
@@ -39,6 +41,20 @@ function AdminRoute({ children }) {
   return children
 }
 
+/** Scanner page: staff only (scanner, venue_admin or superadmin). */
+function ScannerRoute({ children }) {
+  const { isAuthenticated, isScanner } = useAuth()
+  const location = useLocation()
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+  }
+  if (!isScanner) {
+    return <Navigate to="/" replace />
+  }
+  return children
+}
+
 /** Keeps signed-in users away from the login / register screens. */
 function GuestRoute({ children }) {
   const { isAuthenticated } = useAuth()
@@ -46,6 +62,9 @@ function GuestRoute({ children }) {
 }
 
 export default function App() {
+  // Keeps role-dependent navigation correct after an admin changes a role.
+  useSyncUser()
+
   return (
     <div className="flex min-h-dvh flex-col">
       <Navbar />
@@ -83,6 +102,15 @@ export default function App() {
           />
 
           <Route
+            path="/scanner"
+            element={
+              <ScannerRoute>
+                <Scanner />
+              </ScannerRoute>
+            }
+          />
+
+          <Route
             path="/admin"
             element={
               <AdminRoute>
@@ -95,6 +123,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminEvents />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/events/new"
+            element={
+              <AdminRoute>
+                <AdminEventForm />
               </AdminRoute>
             }
           />

@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import { useEvents } from '../hooks/useEvents'
 import EventCard from '../components/events/EventCard'
 
@@ -39,11 +40,16 @@ export default function Home() {
         </p>
       )}
 
-      <div className="flex flex-wrap justify-center gap-6">
+      <motion.div
+        className="flex flex-wrap justify-center gap-6"
+        initial="hidden"
+        animate="show"
+        variants={{ show: { transition: { staggerChildren: 0.07 } } }}
+      >
         {events?.map((event) => (
           <EventCard key={event.id} event={event} />
         ))}
-      </div>
+      </motion.div>
     </div>
   )
 }

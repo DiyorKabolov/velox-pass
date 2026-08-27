@@ -2,6 +2,7 @@
 from app.schemas.event import EventCreate, EventOut, EventUpdate
 from app.schemas.ticket import ScanRequest, ScanResult, TicketCreate, TicketOut
 from app.schemas.user import (
+    ResendRequest,
     Token,
     UserCreate,
     UserLogin,
@@ -22,6 +23,7 @@ __all__ = [
     "SeatOut",
     "TicketCreate",
     "TicketOut",
+    "ResendRequest",
     "Token",
     "UserCreate",
     "UserLogin",

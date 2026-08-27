@@ -1,4 +1,6 @@
 """Registration, login and email verification."""
+import secrets
+
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +23,7 @@ async def get_user_by_login(db: AsyncSession, login: str) -> User | None:
     return result.scalar_one_or_none()
 
 
-async def register_user(db: AsyncSession, data: UserCreate) -> User:
+async def register_user(db: AsyncSession, data: UserCreate) -> tuple[User, bool]:
     existing = await db.execute(
         select(User).where(
             or_(User.username == data.username, User.email == data.email)
@@ -46,12 +48,13 @@ async def register_user(db: AsyncSession, data: UserCreate) -> User:
     await db.flush()
     await db.refresh(user)
 
-    send_verification_email(user.email, user.username, code)
-    return user
+    # Mail failures must not roll back the registration.
+    mail_sent = send_verification_email(user.email, user.username, code)
+    return user, mail_sent
 
 
 async def login_user(db: AsyncSession, data: UserLogin) -> tuple[User, str]:
-    user = await get_user_by_login(db, data.login)
+    user = await get_user_by_login(db, data.email)
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -73,9 +76,13 @@ async def verify_email(db: AsyncSession, email: str, code: str) -> tuple[User, s
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user.is_verified:
-        # Already confirmed: hand back a token instead of failing the flow.
-        return user, create_access_token(user.id, extra={"role": user.role})
-    if not user.verify_token or user.verify_token != code:
+        # Never mint a token here: this endpoint is unauthenticated, so
+        # returning one for an already-verified account would let anyone who
+        # knows an email address sign in without the password.
+        raise HTTPException(
+            status_code=400, detail="Email is already verified, please sign in"
+        )
+    if not user.verify_token or not secrets.compare_digest(user.verify_token, code):
         raise HTTPException(status_code=400, detail="Invalid confirmation code")
 
     user.is_verified = True

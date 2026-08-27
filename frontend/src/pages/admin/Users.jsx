@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Trash2 } from 'lucide-react'
+import { Camera, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { deleteUser, getUsers, updateUserRole } from '../../api/admin'
 import { apiError } from '../../api/client'
@@ -10,6 +10,14 @@ import useAuth from '../../hooks/useAuth'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
 const ROLES = ['user', 'scanner', 'venue_admin', 'superadmin']
+
+// Colour per role so scanners stand out in a long table.
+const ROLE_COLOR = {
+  user: 'var(--muted)',
+  scanner: 'var(--warn)',
+  venue_admin: 'var(--accent)',
+  superadmin: 'var(--ok)',
+}
 
 export default function Users() {
   const queryClient = useQueryClient()
@@ -86,20 +94,26 @@ export default function Users() {
                     {formatShortDate(user.created_at)}
                   </Td>
                   <Td>
-                    <select
-                      value={user.role}
-                      disabled={isSelf || changeRole.isPending}
-                      onChange={(event) =>
-                        changeRole.mutate({ id: user.id, role: event.target.value })
-                      }
-                      className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-2.5 py-1.5 text-xs text-[var(--text)] outline-none transition-colors focus:border-[var(--accent)] disabled:opacity-45"
-                    >
-                      {ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="flex items-center gap-2">
+                      {user.role === 'scanner' && (
+                        <Camera size={14} style={{ color: ROLE_COLOR.scanner }} />
+                      )}
+                      <select
+                        value={user.role}
+                        disabled={isSelf || changeRole.isPending}
+                        onChange={(event) =>
+                          changeRole.mutate({ id: user.id, role: event.target.value })
+                        }
+                        style={{ color: ROLE_COLOR[user.role] ?? 'var(--text)' }}
+                        className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-2.5 py-1.5 text-xs outline-none transition-colors focus:border-[var(--accent)] disabled:opacity-45"
+                      >
+                        {ROLES.map((role) => (
+                          <option key={role} value={role} style={{ color: 'var(--text)' }}>
+                            {role}
+                          </option>
+                        ))}
+                      </select>
+                    </span>
                   </Td>
                   <Td>
                     <div className="flex justify-end">

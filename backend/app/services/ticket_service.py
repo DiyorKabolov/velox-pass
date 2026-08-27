@@ -54,6 +54,7 @@ def serialize_ticket(ticket: Ticket) -> TicketOut:
         seat_id=ticket.seat_id,
         session_id=ticket.session_id,
         used=ticket.used,
+        used_at=ticket.used_at,
         price_paid=float(ticket.price_paid or 0),
         created_at=ticket.created_at,
         event_title=event.title if event else None,
@@ -149,6 +150,9 @@ async def get_user_tickets(db: AsyncSession, user_id: int) -> list[Ticket]:
 
 
 async def get_ticket_by_public_id(db: AsyncSession, ticket_id: str) -> Ticket | None:
+    # QR readers hand back stray whitespace, and some encode a URL; keep the
+    # last path segment so both "VP-ABC123" and ".../t/VP-ABC123" resolve.
+    ticket_id = (ticket_id or "").strip().rstrip("/").split("/")[-1]
     result = await db.execute(
         select(Ticket)
         .options(selectinload(Ticket.event), selectinload(Ticket.seat))
@@ -172,6 +176,7 @@ async def scan_ticket(
         return "expired", "Event has already finished", ticket
 
     ticket.used = True
+    ticket.used_at = datetime.now(timezone.utc)
     await db.flush()
     return "ok", "Welcome! Ticket accepted", ticket
 
