@@ -10,6 +10,12 @@ import useAuth from '../../hooks/useAuth'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
 const ROLES = ['user', 'scanner', 'venue_admin', 'superadmin']
+const ROLE_LABELS = {
+  user: 'пользователь',
+  scanner: 'сканер',
+  venue_admin: 'админ площадки',
+  superadmin: 'суперадмин',
+}
 
 // Colour per role so scanners stand out in a long table.
 const ROLE_COLOR = {
@@ -35,40 +41,40 @@ export default function Users() {
     mutationFn: ({ id, role }) => updateUserRole(id, role),
     onSuccess: (updated) => {
       invalidate()
-      toast.success(`${updated.username} is now ${updated.role}`)
+      toast.success(`${updated.username} — теперь ${ROLE_LABELS[updated.role] ?? updated.role}`)
     },
-    onError: (error) => toast.error(apiError(error, 'Could not change the role')),
+    onError: (error) => toast.error(apiError(error, 'Не удалось изменить роль')),
   })
 
   const remove = useMutation({
     mutationFn: deleteUser,
     onSuccess: () => {
       invalidate()
-      toast.success('User deleted')
+      toast.success('Пользователь удалён')
     },
-    onError: (error) => toast.error(apiError(error, 'Could not delete the user')),
+    onError: (error) => toast.error(apiError(error, 'Не удалось удалить пользователя')),
   })
 
   const handleDelete = (user) => {
-    if (window.confirm(`Delete ${user.username}? Their tickets go with them.`)) {
+    if (window.confirm(`Удалить ${user.username}? Его билеты будут удалены.`)) {
       remove.mutate(user.id)
     }
   }
 
   return (
-    <AdminLayout title="Users" subtitle="Promote, demote or remove accounts.">
+    <AdminLayout title="Пользователи" subtitle="Роли и удаление учётных записей.">
       {isLoading ? (
         <div className="h-48 animate-pulse rounded-[var(--radius)] bg-[var(--surface)]" />
       ) : (
         <TableShell>
           <thead>
             <tr>
-              <Th>Username</Th>
+              <Th>Имя пользователя</Th>
               <Th>Email</Th>
-              <Th>Status</Th>
-              <Th>Registered</Th>
-              <Th>Role</Th>
-              <Th className="text-right">Actions</Th>
+              <Th>Статус</Th>
+              <Th>Регистрация</Th>
+              <Th>Роль</Th>
+              <Th className="text-right">Действия</Th>
             </tr>
           </thead>
           <tbody>
@@ -80,14 +86,14 @@ export default function Users() {
                     {user.username}
                     {isSelf && (
                       <span className="ml-2 font-mono2 text-[10px] text-[var(--muted2)]">
-                        you
+                        вы
                       </span>
                     )}
                   </Td>
                   <Td className="text-[var(--muted)]">{user.email}</Td>
                   <Td>
                     <Badge tone={user.is_verified ? 'ok' : 'warn'}>
-                      {user.is_verified ? 'verified' : 'pending'}
+                      {user.is_verified ? 'подтверждён' : 'ожидает'}
                     </Badge>
                   </Td>
                   <Td className="font-mono2 text-xs text-[var(--muted)]">
@@ -109,7 +115,7 @@ export default function Users() {
                       >
                         {ROLES.map((role) => (
                           <option key={role} value={role} style={{ color: 'var(--text)' }}>
-                            {role}
+                            {ROLE_LABELS[role] ?? role}
                           </option>
                         ))}
                       </select>

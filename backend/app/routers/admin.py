@@ -67,7 +67,7 @@ async def update_event(
 ):
     event = await db.get(Event, event_id)
     if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(event, field, value)
     await db.flush()
@@ -79,7 +79,7 @@ async def update_event(
 async def delete_event(event_id: int, db: AsyncSession = Depends(get_db)):
     event = await db.get(Event, event_id)
     if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
     await db.delete(event)
 
 
@@ -103,10 +103,10 @@ async def update_user_role(
     user_id: int, data: UserRoleUpdate, db: AsyncSession = Depends(get_db)
 ):
     if data.role not in ROLE_RANK:
-        raise HTTPException(status_code=400, detail=f"Unknown role: {data.role}")
+        raise HTTPException(status_code=400, detail=f"Неизвестная роль: {data.role}")
     user = await db.get(User, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     user.role = data.role
     await db.flush()
     await db.refresh(user)
@@ -117,9 +117,9 @@ async def update_user_role(
 async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
     user = await db.get(User, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
     if user.role == "superadmin":
-        raise HTTPException(status_code=400, detail="Cannot delete a superadmin")
+        raise HTTPException(status_code=400, detail="Нельзя удалить суперадмина")
     await db.delete(user)
 
 

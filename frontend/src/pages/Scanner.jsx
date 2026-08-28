@@ -140,13 +140,17 @@ export default function Scanner() {
         <span className="font-display text-sm tracking-[0.18em] text-white drop-shadow">
           VELOX<span className="text-[var(--accent)]">·</span>PASS
         </span>
-        <span className="flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 backdrop-blur">
+        <span
+          title={`Отсканировано: ${count}`}
+          className="flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 backdrop-blur"
+        >
           {running ? (
             <Camera size={14} className="text-[var(--ok)]" />
           ) : (
             <CameraOff size={14} className="text-[var(--muted)]" />
           )}
-          <span className="font-mono2 text-xs text-white">{count}</span>
+          <span className="text-xs text-white/70">Отсканировано</span>
+          <span className="font-mono2 text-xs font-semibold text-white">{count}</span>
         </span>
       </div>
 
@@ -182,7 +186,7 @@ export default function Scanner() {
           </div>
 
           <p className="font-display text-2xl text-white">
-            {result.ok ? 'Проход разрешён' : 'Отказано'}
+            {result.ok ? 'Билет действителен' : 'Отказано'}
           </p>
           <p className="mt-2 max-w-xs text-sm text-white/80">{result.message}</p>
 

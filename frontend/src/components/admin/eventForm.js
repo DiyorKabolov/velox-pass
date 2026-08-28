@@ -7,12 +7,12 @@ export const DEFAULT_COLORS = {
 }
 
 export const COLOR_PRESETS = [
-  { name: 'Purple', card_bg: '#fdfdf5', card_accent: '#a898e0', card_text: '#2a2a2a' },
-  { name: 'Emerald', card_bg: '#f4f7f2', card_accent: '#5fa86b', card_text: '#1f2a20' },
-  { name: 'Red', card_bg: '#fdf3f2', card_accent: '#d1544c', card_text: '#2e1f1e' },
-  { name: 'Blue', card_bg: '#eef2f8', card_accent: '#4a6fa5', card_text: '#1e2733' },
-  { name: 'Gold', card_bg: '#fbf3e8', card_accent: '#e08a4c', card_text: '#33241a' },
-  { name: 'Mono', card_bg: '#f2f2f2', card_accent: '#4a4a4a', card_text: '#1f1f1f' },
+  { name: 'Сиреневый', card_bg: '#fdfdf5', card_accent: '#a898e0', card_text: '#2a2a2a' },
+  { name: 'Изумруд', card_bg: '#f4f7f2', card_accent: '#5fa86b', card_text: '#1f2a20' },
+  { name: 'Красный', card_bg: '#fdf3f2', card_accent: '#d1544c', card_text: '#2e1f1e' },
+  { name: 'Синий', card_bg: '#eef2f8', card_accent: '#4a6fa5', card_text: '#1e2733' },
+  { name: 'Золото', card_bg: '#fbf3e8', card_accent: '#e08a4c', card_text: '#33241a' },
+  { name: 'Моно', card_bg: '#f2f2f2', card_accent: '#4a4a4a', card_text: '#1f1f1f' },
 ]
 
 export const EMPTY_EVENT = {
@@ -58,10 +58,10 @@ export function toPayload(form) {
 
 /** Returns a message when the form cannot be submitted yet. */
 export function validate(form) {
-  if (!form.title.trim()) return 'Title is required'
-  if (!form.date) return 'Date is required'
-  if (!fromDatetimeLocal(form.date)) return 'Date is not valid'
-  if (Number(form.capacity) < 0) return 'Capacity cannot be negative'
+  if (!form.title.trim()) return 'Укажите название'
+  if (!form.date) return 'Укажите дату'
+  if (!fromDatetimeLocal(form.date)) return 'Некорректная дата'
+  if (Number(form.capacity) < 0) return 'Вместимость не может быть отрицательной'
   return null
 }
 

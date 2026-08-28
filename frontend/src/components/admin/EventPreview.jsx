@@ -12,7 +12,7 @@ export default function EventPreview({ form }) {
   return (
     <div className="sticky top-4">
       <p className="mb-3 font-mono2 text-[10px] uppercase tracking-[0.16em] text-[var(--muted2)]">
-        Live preview
+        Предпросмотр
       </p>
 
       <div
@@ -31,12 +31,12 @@ export default function EventPreview({ form }) {
             </p>
 
             <h3 className="mt-2 truncate text-[16px] font-extrabold leading-tight">
-              {form.title.trim() || 'Event title'}
+              {form.title.trim() || 'Название мероприятия'}
             </h3>
 
             <p className="mt-2 flex items-center gap-1.5 text-[12px] leading-none opacity-60">
               <CalendarDays size={13} strokeWidth={1.8} />
-              {form.date ? formatDateTime(form.date) : 'Date not set'}
+              {form.date ? formatDateTime(form.date) : 'Дата не указана'}
             </p>
             {form.location.trim() && (
               <p className="mt-1.5 flex items-center gap-1.5 truncate text-[12px] leading-none opacity-60">
@@ -91,8 +91,7 @@ export default function EventPreview({ form }) {
       </div>
 
       <p className="mt-3 text-xs leading-relaxed text-[var(--muted2)]">
-        These three colours are stored on the event and used by every ticket
-        issued for it.
+        Эти три цвета сохраняются в мероприятии и применяются ко всем его билетам.
       </p>
     </div>
   )

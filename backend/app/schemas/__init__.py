@@ -10,7 +10,23 @@ from app.schemas.user import (
     UserRoleUpdate,
     VerifyRequest,
 )
-from app.schemas.venue import HallCreate, HallOut, SeatOut, VenueCreate, VenueOut
+from app.schemas.session import (
+    SeatMapOut,
+    SeatMapSeat,
+    SeatPriceIn,
+    SeatPriceOut,
+    SessionCreate,
+    SessionOut,
+)
+from app.schemas.venue import (
+    HallCreate,
+    HallOut,
+    HallUpdate,
+    SeatOut,
+    VenueCreate,
+    VenueOut,
+    VenueUpdate,
+)
 
 __all__ = [
     "EventCreate",
@@ -20,10 +36,18 @@ __all__ = [
     "HallOut",
     "ScanRequest",
     "ScanResult",
+    "SeatMapOut",
+    "SeatMapSeat",
+    "HallUpdate",
     "SeatOut",
     "TicketCreate",
     "TicketOut",
     "ResendRequest",
+    "SeatPriceIn",
+    "SeatPriceOut",
+    "SessionCreate",
+    "SessionOut",
+    "VenueUpdate",
     "Token",
     "UserCreate",
     "UserLogin",

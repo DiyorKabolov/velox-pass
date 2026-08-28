@@ -49,7 +49,7 @@ export default function Navbar() {
 
   const handleLogout = () => {
     logout()
-    toast.success('Signed out')
+    toast.success('Вы вышли из аккаунта')
     navigate('/')
   }
 
@@ -66,24 +66,24 @@ export default function Navbar() {
 
         <div className="flex items-center gap-0.5 sm:gap-1">
           <NavItem to="/" end icon={CalendarDays}>
-            Events
+            Афиша
           </NavItem>
 
           {isAuthenticated && (
             <NavItem to="/cabinet" icon={Ticket}>
-              My tickets
+              Мои билеты
             </NavItem>
           )}
 
           {isScanner && (
             <NavItem to="/scanner" icon={Camera}>
-              Scanner
+              Сканер
             </NavItem>
           )}
 
           {isSuperadmin && (
             <NavItem to="/admin" icon={LayoutDashboard}>
-              Admin
+              Админ
             </NavItem>
           )}
         </div>
@@ -98,8 +98,8 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={handleLogout}
-                title="Sign out"
-                aria-label="Sign out"
+                title="Выйти"
+                aria-label="Выйти"
                 className="rounded-[var(--radius-sm)] border border-[var(--border)] p-2 text-[var(--muted)] transition-all duration-150 hover:border-[var(--err)] hover:text-[var(--err)] active:scale-[0.92]"
               >
                 <LogOut size={14} />
@@ -111,13 +111,13 @@ export default function Navbar() {
                 to="/login"
                 className="whitespace-nowrap rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-[var(--muted)] transition-all duration-150 hover:text-[var(--text)] active:scale-[0.94] sm:px-3"
               >
-                Sign in
+                Войти
               </Link>
               <Link
                 to="/register"
                 className="whitespace-nowrap rounded-[var(--radius-sm)] bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-[var(--bg)] transition-all duration-150 hover:brightness-110 active:scale-[0.94]"
               >
-                Sign up
+                Регистрация
               </Link>
             </>
           )}

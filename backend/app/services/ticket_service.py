@@ -90,17 +90,17 @@ async def generate_ticket(
 ) -> Ticket:
     event = await db.get(Event, event_id)
     if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
 
     seat: Seat | None = None
     if event.has_seats:
         if not seat_id:
             raise HTTPException(
-                status_code=400, detail="This event requires choosing a seat"
+                status_code=400, detail="Для этого мероприятия нужно выбрать место"
             )
         seat = await db.get(Seat, seat_id)
         if not seat or seat.is_aisle:
-            raise HTTPException(status_code=400, detail="Seat is not available")
+            raise HTTPException(status_code=400, detail="Место недоступно")
 
         taken = await db.execute(
             select(Ticket).where(
@@ -109,14 +109,14 @@ async def generate_ticket(
         )
         if taken.scalar_one_or_none():
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Seat is already taken"
+                status_code=status.HTTP_409_CONFLICT, detail="Место уже занято"
             )
     elif event.capacity:
         sold = await db.scalar(
             select(func.count(Ticket.id)).where(Ticket.event_id == event_id)
         )
         if (sold or 0) >= event.capacity:
-            raise HTTPException(status_code=409, detail="Event is sold out")
+            raise HTTPException(status_code=409, detail="Мест нет")
 
     ticket = Ticket(
         ticket_id=new_ticket_id(),
@@ -167,18 +167,18 @@ async def scan_ticket(
     """Validate a scanned code and mark the ticket used on first success."""
     ticket = await get_ticket_by_public_id(db, ticket_id)
     if not ticket:
-        return "invalid", "Ticket not found", None
+        return "invalid", "Билет не найден", None
     if ticket.used:
-        return "used", "Ticket has already been used", ticket
+        return "used", "Билет уже использован", ticket
 
     event = ticket.event
     if event and event.date and event.date < datetime.now(timezone.utc):
-        return "expired", "Event has already finished", ticket
+        return "expired", "Мероприятие уже завершилось", ticket
 
     ticket.used = True
     ticket.used_at = datetime.now(timezone.utc)
     await db.flush()
-    return "ok", "Welcome! Ticket accepted", ticket
+    return "ok", "Проходите, билет действителен", ticket
 
 
 def build_ticket_pdf(ticket: Ticket, username: str) -> bytes:

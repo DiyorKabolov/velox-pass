@@ -4,8 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.event import Event
+from app.models.session import Session
 from app.models.ticket import Ticket
 from app.schemas.event import EventOut
+from app.schemas.session import SessionOut
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -38,5 +40,21 @@ async def list_events(
 async def get_event(event_id: int, db: AsyncSession = Depends(get_db)):
     event = await db.get(Event, event_id)
     if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
     return await _with_counts(db, event)
+
+
+@router.get("/{event_id}/sessions", response_model=list[SessionOut])
+async def event_sessions(event_id: int, db: AsyncSession = Depends(get_db)):
+    """Showings of one event, soonest first. Cancelled ones are kept out."""
+    from app.routers.sessions import build_session_out
+
+    if not await db.get(Event, event_id):
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+
+    result = await db.execute(
+        select(Session)
+        .where(Session.event_id == event_id, Session.status != "cancelled")
+        .order_by(Session.datetime.asc())
+    )
+    return [await build_session_out(db, s) for s in result.scalars().all()]

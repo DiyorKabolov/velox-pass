@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.websocket_manager import manager
 from app.models.user import User
 from app.schemas.ticket import TicketCreate, TicketOut
 from app.services import ticket_service
@@ -30,15 +31,28 @@ async def buy_ticket(
     ticket = await ticket_service.generate_ticket(
         db, user, data.event_id, data.session_id, data.seat_id
     )
+
+    # Push the seat to everyone watching this session's map.
+    if ticket.session_id and ticket.seat:
+        await manager.broadcast_to_session(
+            ticket.session_id,
+            {
+                "type": "seat_taken",
+                "seat_id": ticket.seat.id,
+                "row": ticket.seat.row,
+                "col": ticket.seat.col,
+            },
+        )
+
     return ticket_service.serialize_ticket(ticket)
 
 
 async def _owned_ticket(db: AsyncSession, ticket_id: str, user: User):
     ticket = await ticket_service.get_ticket_by_public_id(db, ticket_id)
     if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
+        raise HTTPException(status_code=404, detail="Билет не найден")
     if ticket.user_id != user.id and user.role != "superadmin":
-        raise HTTPException(status_code=403, detail="This ticket belongs to someone else")
+        raise HTTPException(status_code=403, detail="Этот билет принадлежит другому пользователю")
     return ticket
 
 

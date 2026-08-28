@@ -38,7 +38,7 @@ export default function EventCard({ event }) {
             className="mb-2 font-mono2 text-[10px] uppercase tracking-[0.14em]"
             style={{ color: colors.accent }}
           >
-            {past ? 'Finished' : soldOut ? 'Sold out' : 'On sale'}
+            {past ? 'Завершено' : soldOut ? 'Мест нет' : 'В продаже'}
           </span>
 
           <h3 className="font-display text-lg leading-snug line-clamp-2">{event.title}</h3>
@@ -75,7 +75,7 @@ export default function EventCard({ event }) {
 
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium opacity-80 transition-opacity duration-200 group-hover:opacity-100">
-                Details
+                Подробнее
               </span>
               <ArrowRight
                 size={18}

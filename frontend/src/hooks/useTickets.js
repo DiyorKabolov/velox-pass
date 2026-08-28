@@ -25,9 +25,9 @@ export function useBuyTicket() {
     onSuccess: (ticket) => {
       queryClient.invalidateQueries({ queryKey: TICKETS_KEY })
       queryClient.invalidateQueries({ queryKey: ['events'] })
-      toast.success(`Ticket ${ticket.ticket_id} is yours`)
+      toast.success(`Билет ${ticket.ticket_id} ваш`)
     },
-    onError: (error) => toast.error(apiError(error, 'Could not buy the ticket')),
+    onError: (error) => toast.error(apiError(error, 'Не удалось получить билет')),
   })
 }
 

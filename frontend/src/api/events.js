@@ -29,3 +29,9 @@ export async function updateEvent(id, payload) {
 export async function deleteEvent(id) {
   await client.delete(`/admin/events/${id}`)
 }
+
+/** Showings of one event, soonest first. Cancelled ones are excluded. */
+export async function getEventSessions(eventId) {
+  const { data } = await client.get(`/events/${eventId}/sessions`)
+  return data
+}

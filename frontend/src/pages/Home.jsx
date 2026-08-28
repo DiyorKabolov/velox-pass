@@ -9,11 +9,11 @@ export default function Home() {
     <div className="mx-auto max-w-6xl px-5 py-14">
       <header className="mb-12 text-center">
         <p className="font-mono2 text-[11px] uppercase tracking-[0.28em] text-[var(--muted2)]">
-          Now on sale
+          В продаже
         </p>
         <h1 className="mt-3 font-display text-3xl tracking-tight sm:text-4xl">Афиша</h1>
         <p className="mx-auto mt-3 max-w-md text-sm text-[var(--muted)]">
-          Pick an event, choose your seat and get a QR ticket instantly.
+          Выберите мероприятие, место и получите QR-билет мгновенно.
         </p>
       </header>
 
@@ -30,13 +30,13 @@ export default function Home() {
 
       {isError && (
         <p className="text-center text-sm text-[var(--err)]">
-          Could not load events. Is the API running?
+          Не удалось загрузить афишу. Сервер запущен?
         </p>
       )}
 
       {!isLoading && !isError && events?.length === 0 && (
         <p className="text-center text-sm text-[var(--muted)]">
-          No events published yet — check back soon.
+          Мероприятий пока нет. Следите за обновлениями.
         </p>
       )}
 

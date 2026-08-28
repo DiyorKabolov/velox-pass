@@ -61,7 +61,7 @@ export default function Modal({ open, onClose, title, subtitle, footer, children
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close"
+                aria-label="Закрыть"
                 className="shrink-0 rounded-[var(--radius-sm)] border border-[var(--border)] p-2 text-[var(--muted)] transition-all duration-150 hover:border-[var(--border2)] hover:text-[var(--text)] active:scale-[0.92]"
               >
                 <X size={15} />

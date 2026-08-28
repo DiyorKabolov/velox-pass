@@ -14,7 +14,7 @@ export default function ColorField({ label, value, fallback, onChange }) {
           type="color"
           value={safe}
           onChange={(event) => onChange(event.target.value)}
-          aria-label={`${label} swatch`}
+          aria-label={`${label} — образец цвета`}
           className="h-9 w-11 shrink-0 cursor-pointer rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] p-1"
         />
         <input

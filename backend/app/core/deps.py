@@ -28,7 +28,7 @@ async def get_current_user(
 ) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Not authenticated",
+        detail="Необходима авторизация",
         headers={"WWW-Authenticate": "Bearer"},
     )
     # HTTPBearer already split "Bearer <token>"; it yields None when the header
@@ -53,7 +53,7 @@ def require_role(*roles: str):
         if user.role == "superadmin" or user.role in roles:
             return user
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав"
         )
 
     return checker
@@ -66,7 +66,7 @@ def require_min_rank(minimum: str):
         if ROLE_RANK.get(user.role, 0) >= ROLE_RANK.get(minimum, 99):
             return user
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав"
         )
 
     return checker

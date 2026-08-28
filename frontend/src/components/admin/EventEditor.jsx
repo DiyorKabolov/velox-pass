@@ -22,31 +22,31 @@ export default function EventEditor({ form, onChange }) {
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px]">
       <div className="min-w-0 space-y-4">
         <Input
-          label="Title"
+          label="Название"
           name="title"
           value={form.title}
           onChange={field('title')}
-          placeholder="Symphony Night"
+          placeholder="Симфонический вечер"
           required
         />
 
         <label className="block">
           <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
-            Description
+            Описание
           </span>
           <textarea
             name="description"
             value={form.description}
             onChange={field('description')}
             rows={3}
-            placeholder="What is this event about?"
+            placeholder="О чём мероприятие?"
             className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder:text-[var(--muted2)] outline-none transition-all duration-150 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25"
           />
         </label>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
-            label="Date and time"
+            label="Дата и время"
             name="date"
             type="datetime-local"
             value={form.date}
@@ -54,27 +54,27 @@ export default function EventEditor({ form, onChange }) {
             required
           />
           <Input
-            label="Capacity"
+            label="Вместимость"
             name="capacity"
             type="number"
             min={0}
             value={form.capacity}
             onChange={(event) => set({ capacity: event.target.value })}
-            placeholder="0 = unlimited"
+            placeholder="0 — без ограничения"
           />
         </div>
 
         <Input
-          label="Location"
+          label="Место проведения"
           name="location"
           value={form.location}
           onChange={field('location')}
-          placeholder="Grand Concert Hall"
+          placeholder="Большой концертный зал"
         />
 
         <div className="pt-1">
           <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
-            Ticket colours
+            Цвета билета
           </span>
 
           <div className="mb-4 flex flex-wrap gap-2">
@@ -110,19 +110,19 @@ export default function EventEditor({ form, onChange }) {
 
           <div className="grid gap-3 sm:grid-cols-3">
             <ColorField
-              label="Background"
+              label="Фон"
               value={form.card_bg}
               fallback={DEFAULT_COLORS.card_bg}
               onChange={(card_bg) => set({ card_bg })}
             />
             <ColorField
-              label="Accent"
+              label="Акцент"
               value={form.card_accent}
               fallback={DEFAULT_COLORS.card_accent}
               onChange={(card_accent) => set({ card_accent })}
             />
             <ColorField
-              label="Text"
+              label="Текст"
               value={form.card_text}
               fallback={DEFAULT_COLORS.card_text}
               onChange={(card_text) => set({ card_text })}

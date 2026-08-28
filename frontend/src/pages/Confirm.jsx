@@ -25,17 +25,17 @@ export default function Confirm() {
 
   const submitCode = async (code) => {
     if (!email) {
-      toast.error('Enter the email you registered with')
+      toast.error('Укажите email, на который регистрировались')
       return
     }
     setLoading(true)
     try {
       const data = await verifyEmail(email, code)
       setAuth(data.user, data.access_token)
-      toast.success('Email confirmed')
+      toast.success('Email подтверждён')
       navigate('/')
     } catch (error) {
-      toast.error(apiError(error, 'Invalid confirmation code'))
+      toast.error(apiError(error, 'Неверный код подтверждения'))
       setDigits(Array(LENGTH).fill(''))
       inputsRef.current[0]?.focus()
     } finally {
@@ -74,14 +74,14 @@ export default function Confirm() {
 
   const handleResend = async () => {
     if (!email) {
-      toast.error('Enter your email first')
+      toast.error('Сначала укажите email')
       return
     }
     try {
       await resendCode(email)
-      toast.success('A new code is on its way')
+      toast.success('Новый код отправлен')
     } catch (error) {
-      toast.error(apiError(error, 'Could not resend the code'))
+      toast.error(apiError(error, 'Не удалось отправить код повторно'))
     }
   }
 
@@ -92,9 +92,9 @@ export default function Confirm() {
           <p className="font-display text-[11px] tracking-[0.18em] text-[var(--accent)]">
             VELOX·PASS
           </p>
-          <h1 className="mt-3 font-display text-xl">Confirm your email</h1>
+          <h1 className="mt-3 font-display text-xl">Подтверждение email</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Enter the {LENGTH}-digit code we sent you.
+            Введите {LENGTH}-значный код из письма.
           </p>
         </div>
 
@@ -122,7 +122,7 @@ export default function Confirm() {
               onKeyDown={(event) => handleKeyDown(index, event)}
               inputMode="numeric"
               maxLength={LENGTH}
-              aria-label={`Digit ${index + 1}`}
+              aria-label={`Цифра ${index + 1}`}
               className="h-13 w-11 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] py-3 text-center font-mono2 text-lg text-[var(--text)] outline-none transition-colors focus:border-[var(--accent)]"
             />
           ))}
@@ -135,7 +135,7 @@ export default function Confirm() {
           className="w-full"
           size="lg"
         >
-          Confirm
+          Подтвердить
         </Button>
 
         <button
@@ -143,7 +143,7 @@ export default function Confirm() {
           onClick={handleResend}
           className="mt-5 w-full text-center text-sm text-[var(--muted)] transition-colors hover:text-[var(--accent)]"
         >
-          Resend the code
+          Не пришло письмо? Отправить повторно
         </button>
       </div>
     </div>

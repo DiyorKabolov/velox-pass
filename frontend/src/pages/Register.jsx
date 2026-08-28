@@ -17,17 +17,17 @@ export default function Register() {
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (form.password.length < 6) {
-      toast.error('Password must be at least 6 characters')
+      toast.error('Пароль должен быть не короче 6 символов')
       return
     }
 
     setLoading(true)
     try {
       await registerRequest(form.username, form.email, form.password)
-      toast.success('Check your email for the confirmation code')
+      toast.success('Код подтверждения отправлен на почту')
       navigate('/confirm', { state: { email: form.email } })
     } catch (error) {
-      toast.error(apiError(error, 'Could not create the account'))
+      toast.error(apiError(error, 'Не удалось создать аккаунт'))
     } finally {
       setLoading(false)
     }
@@ -40,15 +40,15 @@ export default function Register() {
           <p className="font-display text-[11px] tracking-[0.18em] text-[var(--accent)]">
             VELOX·PASS
           </p>
-          <h1 className="mt-3 font-display text-xl">Create account</h1>
+          <h1 className="mt-3 font-display text-xl">Регистрация</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="Username"
+            label="Имя пользователя"
             name="username"
             autoComplete="username"
-            placeholder="yourname"
+            placeholder="ваше имя"
             minLength={3}
             value={form.username}
             onChange={update}
@@ -65,25 +65,25 @@ export default function Register() {
             required
           />
           <Input
-            label="Password"
+            label="Пароль"
             name="password"
             type="password"
             autoComplete="new-password"
-            placeholder="at least 6 characters"
+            placeholder="минимум 6 символов"
             minLength={6}
             value={form.password}
             onChange={update}
             required
           />
           <Button type="submit" loading={loading} className="w-full" size="lg">
-            Sign up
+            Создать аккаунт
           </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-[var(--muted)]">
-          Already registered?{' '}
+          Уже есть аккаунт?{' '}
           <Link to="/login" className="text-[var(--accent)] hover:underline">
-            Sign in
+            Войти
           </Link>
         </p>
       </div>

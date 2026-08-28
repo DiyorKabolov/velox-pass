@@ -23,6 +23,21 @@ superadmin. It is safe to re-run — existing data is left alone. Run it before
 the first `python main.py`, otherwise every request that touches the database
 fails with a 500.
 
+## Demo data (optional)
+
+```bash
+cd backend
+python seed_demo.py
+```
+
+Fills the database with Russian demo content: three venues with five halls
+(aisles, VIP rows, a balcony, a couple of broken seats), eight events, sessions
+with per-category prices, and one ticket in each state so the cabinet shows a
+valid, an expired and a scanned card.
+
+It replaces every event, venue, hall, seat, session and ticket, but never
+touches user accounts. `python seed_demo.py --keep` adds without deleting.
+
 ## Starting the app
 
 Terminal 1 — Backend + ngrok tunnel:

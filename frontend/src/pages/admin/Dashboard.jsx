@@ -29,19 +29,19 @@ export default function Dashboard() {
   })
 
   const cards = [
-    { icon: Users, label: 'Users', value: stats?.users ?? 0 },
-    { icon: CalendarDays, label: 'Events', value: stats?.events ?? 0 },
-    { icon: Ticket, label: 'Tickets', value: stats?.tickets ?? 0 },
-    { icon: CheckCircle2, label: 'Scanned', value: stats?.tickets_used ?? 0 },
+    { icon: Users, label: 'Пользователи', value: stats?.users ?? 0 },
+    { icon: CalendarDays, label: 'Мероприятия', value: stats?.events ?? 0 },
+    { icon: Ticket, label: 'Билеты', value: stats?.tickets ?? 0 },
+    { icon: CheckCircle2, label: 'Проверено', value: stats?.tickets_used ?? 0 },
     {
       icon: Wallet,
-      label: 'Revenue',
+      label: 'Выручка',
       value: (stats?.revenue ?? 0).toFixed(2),
     },
   ]
 
   return (
-    <AdminLayout title="Dashboard" subtitle="System-wide numbers at a glance.">
+    <AdminLayout title="Сводка" subtitle="Ключевые показатели системы.">
       <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {cards.map((card) => (
           <StatCard
@@ -53,14 +53,14 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <h2 className="mb-4 font-display text-base">Recent events</h2>
+      <h2 className="mb-4 font-display text-base">Последние мероприятия</h2>
       <TableShell>
         <thead>
           <tr>
-            <Th>Title</Th>
-            <Th>Date</Th>
-            <Th>Location</Th>
-            <Th className="text-right">Sold</Th>
+            <Th>Название</Th>
+            <Th>Дата</Th>
+            <Th>Место</Th>
+            <Th className="text-right">Продано</Th>
           </tr>
         </thead>
         <tbody>
@@ -79,7 +79,7 @@ export default function Dashboard() {
           {events?.length === 0 && (
             <tr>
               <Td className="text-center text-[var(--muted)]" colSpan={4}>
-                No events yet.
+                Мероприятий пока нет.
               </Td>
             </tr>
           )}

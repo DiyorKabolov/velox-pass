@@ -32,13 +32,13 @@ export default function Tickets() {
 
   return (
     <AdminLayout
-      title="Tickets"
-      subtitle={`${tickets?.length ?? 0} issued in total.`}
+      title="Билеты"
+      subtitle={`Всего выдано: ${tickets?.length ?? 0}.`}
     >
       <div className="mb-5 max-w-xs">
         <Input
           name="search"
-          placeholder="Search by ticket ID or event…"
+          placeholder="Поиск по ID билета или мероприятию…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -50,12 +50,12 @@ export default function Tickets() {
         <TableShell>
           <thead>
             <tr>
-              <Th>Ticket ID</Th>
-              <Th>Event</Th>
-              <Th>Seat</Th>
-              <Th>Issued</Th>
-              <Th className="text-right">Price</Th>
-              <Th className="text-right">Status</Th>
+              <Th>ID билета</Th>
+              <Th>Мероприятие</Th>
+              <Th>Место</Th>
+              <Th>Выдан</Th>
+              <Th className="text-right">Цена</Th>
+              <Th className="text-right">Статус</Th>
             </tr>
           </thead>
           <tbody>
@@ -80,7 +80,7 @@ export default function Tickets() {
             {filtered.length === 0 && (
               <tr>
                 <Td className="text-center text-[var(--muted)]" colSpan={6}>
-                  {query ? 'Nothing matches that search.' : 'No tickets issued yet.'}
+                  {query ? 'Ничего не найдено.' : 'Билетов пока нет.'}
                 </Td>
               </tr>
             )}

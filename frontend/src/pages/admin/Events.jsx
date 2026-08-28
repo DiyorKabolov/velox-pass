@@ -35,18 +35,18 @@ export default function Events() {
     onSuccess: () => {
       invalidate()
       setEditing(null)
-      toast.success('Event updated')
+      toast.success('Мероприятие обновлено')
     },
-    onError: (error) => toast.error(apiError(error, 'Could not update the event')),
+    onError: (error) => toast.error(apiError(error, 'Не удалось обновить мероприятие')),
   })
 
   const remove = useMutation({
     mutationFn: deleteEvent,
     onSuccess: () => {
       invalidate()
-      toast.success('Event deleted')
+      toast.success('Мероприятие удалено')
     },
-    onError: (error) => toast.error(apiError(error, 'Could not delete the event')),
+    onError: (error) => toast.error(apiError(error, 'Не удалось удалить мероприятие')),
   })
 
   const handleSave = () => {
@@ -59,19 +59,19 @@ export default function Events() {
   }
 
   const handleDelete = (event) => {
-    if (window.confirm(`Delete "${event.title}"? Its tickets go with it.`)) {
+    if (window.confirm(`Удалить «${event.title}»? Это действие нельзя отменить.`)) {
       remove.mutate(event.id)
     }
   }
 
   return (
     <AdminLayout
-      title="Events"
-      subtitle="Create, edit and remove what appears on the афиша."
+      title="Мероприятия"
+      subtitle="Создание, редактирование и удаление мероприятий афиши."
       action={
         <Button onClick={() => navigate('/admin/events/new')} className="shrink-0">
           <Plus size={15} />
-          New Event
+          Новое мероприятие
         </Button>
       }
     >
@@ -81,12 +81,12 @@ export default function Events() {
         <TableShell>
           <thead>
             <tr>
-              <Th>Title</Th>
-              <Th>Date</Th>
-              <Th>Location</Th>
-              <Th className="text-right">Capacity</Th>
-              <Th className="text-right">Sold</Th>
-              <Th className="text-right">Actions</Th>
+              <Th>Название</Th>
+              <Th>Дата</Th>
+              <Th>Место</Th>
+              <Th className="text-right">Вместимость</Th>
+              <Th className="text-right">Продано</Th>
+              <Th className="text-right">Действия</Th>
             </tr>
           </thead>
           <tbody>
@@ -112,7 +112,7 @@ export default function Events() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      aria-label={`Edit ${event.title}`}
+                      aria-label={`Редактировать ${event.title}`}
                       onClick={() => setEditing({ id: event.id, form: toFormValue(event) })}
                     >
                       <Pencil size={13} />
@@ -120,7 +120,7 @@ export default function Events() {
                     <Button
                       size="sm"
                       variant="danger"
-                      aria-label={`Delete ${event.title}`}
+                      aria-label={`Удалить ${event.title}`}
                       loading={remove.isPending && remove.variables === event.id}
                       onClick={() => handleDelete(event)}
                     >
@@ -133,7 +133,7 @@ export default function Events() {
             {events?.length === 0 && (
               <tr>
                 <Td className="text-center text-[var(--muted)]" colSpan={6}>
-                  No events yet — create the first one.
+                  Мероприятий пока нет — создайте первое.
                 </Td>
               </tr>
             )}
@@ -144,15 +144,15 @@ export default function Events() {
       <Modal
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
-        title="Edit event"
+        title="Редактировать мероприятие"
         subtitle={editing?.form.title}
         footer={
           <>
             <Button variant="ghost" onClick={() => setEditing(null)}>
-              Cancel
+              Отмена
             </Button>
             <Button onClick={handleSave} loading={save.isPending}>
-              Save changes
+              Сохранить
             </Button>
           </>
         }

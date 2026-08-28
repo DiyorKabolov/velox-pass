@@ -7,10 +7,10 @@ export default function Footer() {
         <span>© Velox Pass 2026</span>
         <div className="flex items-center gap-4">
           <Link to="/" className="transition-colors hover:text-[var(--muted)]">
-            Events
+            Афиша
           </Link>
           <Link to="/cabinet" className="transition-colors hover:text-[var(--muted)]">
-            My tickets
+            Мои билеты
           </Link>
           <a
             href="/docs"

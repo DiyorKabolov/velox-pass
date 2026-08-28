@@ -2,7 +2,7 @@ import atexit
 import os
 import sys
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,7 +11,8 @@ from pyngrok import ngrok as ngrok_tunnel
 import uvicorn
 
 from app.core.config import settings
-from app.routers import admin, auth, events, scanner, tickets, venues
+from app.core.websocket_manager import manager
+from app.routers import admin, auth, events, scanner, sessions, tickets, venues
 
 # The Windows console defaults to a legacy code page that cannot encode the
 # emoji in the startup banner, which would crash the process on the first print.
@@ -40,6 +41,7 @@ app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(tickets.router, prefix=API_PREFIX)
 app.include_router(venues.router, prefix=API_PREFIX)
+app.include_router(sessions.router, prefix=API_PREFIX)
 app.include_router(scanner.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 
@@ -52,6 +54,24 @@ def status():
 @app.get("/health", tags=["system"])
 def health():
     return {"status": "healthy"}
+
+
+@app.websocket("/ws/sessions/{session_id}/seats")
+async def session_seats_socket(websocket: WebSocket, session_id: int):
+    """Read-only live seat updates. Unauthenticated on purpose: it carries no
+    personal data, only which seat numbers just sold."""
+    await manager.connect(session_id, websocket)
+    try:
+        while True:
+            # Nothing is expected from the client; this keeps the socket open
+            # and notices the disconnect.
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        await manager.disconnect(session_id, websocket)
 
 
 # --- React frontend -------------------------------------------------------

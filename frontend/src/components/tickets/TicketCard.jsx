@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Clock, MapPin } from 'lucide-react'
+import { Armchair, CalendarDays, Clock, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { downloadPdf, fetchQrBlobUrl } from '../../api/tickets'
 import { formatDateTime, formatIsoDate, isExpired } from '../../utils/dates'
 import { getTicketColors, readableOn, withAlpha } from '../../utils/colors'
 
-// Fixed so the card never changes size when its state changes.
-const CARD_HEIGHT = 212
+// Fixed so the card never changes size when its state changes. Sized for the
+// tallest content -- a two-line title plus the extra seat row -- because the
+// body is centred, so anything taller spills out of the card and the title
+// ends up invisible against the page behind it.
+const CARD_HEIGHT = 268
 const TEAR_WIDTH = 22
 const TEETH = 13
 // How deep the teeth bite into each half, as a share of the tear width.
@@ -78,6 +81,15 @@ function tearAngles(ticketId) {
   const body = -1.7 + hashOf(ticketId, 1) * 3.4
   const spread = 2.6 + hashOf(ticketId, 2) * 3.4
   return { body, stub: body + spread }
+}
+
+/**
+ * "J14" -> "Ряд J · Место 14". Anything that does not match the row-letter
+ * scheme is shown exactly as it came from the API.
+ */
+function seatText(label) {
+  const parts = String(label ?? '').match(/^([A-Za-z]+)(\d+)$/)
+  return parts ? `Ряд ${parts[1]} · Место ${parts[2]}` : label
 }
 
 function InfoRow({ icon: Icon, children }) {
@@ -162,7 +174,7 @@ export default function TicketCard({ ticket }) {
             ...(torn ? tearMask('right') : null),
           }}
         >
-          <h3 className="truncate text-[18px] font-extrabold leading-tight sm:text-[22px]">
+          <h3 className="line-clamp-2 text-[18px] font-extrabold leading-tight sm:text-[22px]">
             {ticket.event_title ?? 'Событие'}
           </h3>
 
@@ -170,6 +182,11 @@ export default function TicketCard({ ticket }) {
             <InfoRow icon={CalendarDays}>{formatDateTime(ticket.event_date)}</InfoRow>
             {ticket.event_location && (
               <InfoRow icon={MapPin}>{ticket.event_location}</InfoRow>
+            )}
+            {ticket.seat_label && (
+              <InfoRow icon={Armchair}>
+                <strong className="font-semibold">{seatText(ticket.seat_label)}</strong>
+              </InfoRow>
             )}
             <InfoRow icon={Clock}>Получен {formatIsoDate(ticket.created_at)}</InfoRow>
           </div>
@@ -229,7 +246,7 @@ export default function TicketCard({ ticket }) {
             {qrSrc ? (
               <img
                 src={qrSrc}
-                alt={`QR код билета ${ticket.ticket_id}`}
+                alt={`QR-код билета ${ticket.ticket_id}`}
                 className="h-full w-full object-contain"
               />
             ) : (
@@ -237,11 +254,17 @@ export default function TicketCard({ ticket }) {
             )}
           </div>
 
-          <p className="text-center text-[10px] font-semibold uppercase leading-[1.4] tracking-[0.12em] opacity-85">
-            Покажите
-            <br />
-            при входе
-          </p>
+          {ticket.seat_label ? (
+            <p className="text-center text-[11px] font-bold uppercase leading-tight tracking-[0.08em]">
+              {ticket.seat_label}
+            </p>
+          ) : (
+            <p className="text-center text-[10px] font-semibold uppercase leading-[1.4] tracking-[0.12em] opacity-85">
+              Покажите
+              <br />
+              при входе
+            </p>
+          )}
         </div>
 
         {/* Intact perforation. Anchored to the stub's own left edge rather than

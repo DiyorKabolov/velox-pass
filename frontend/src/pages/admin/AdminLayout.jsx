@@ -1,10 +1,12 @@
 import { NavLink } from 'react-router-dom'
 
 const TABS = [
-  { to: '/admin', label: 'Dashboard', end: true },
-  { to: '/admin/events', label: 'Events' },
-  { to: '/admin/users', label: 'Users' },
-  { to: '/admin/tickets', label: 'Tickets' },
+  { to: '/admin', label: 'Сводка', end: true },
+  { to: '/admin/events', label: 'Мероприятия' },
+  { to: '/admin/venues', label: 'Площадки' },
+  { to: '/admin/sessions', label: 'Сеансы' },
+  { to: '/admin/users', label: 'Пользователи' },
+  { to: '/admin/tickets', label: 'Билеты' },
 ]
 
 function tabClass({ isActive }) {
@@ -23,7 +25,7 @@ export default function AdminLayout({ title, subtitle, action, children }) {
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="font-mono2 text-[11px] uppercase tracking-[0.24em] text-[var(--muted2)]">
-            Administration
+            Администрирование
           </p>
           <h1 className="mt-2 font-display text-2xl tracking-tight">{title}</h1>
           {subtitle && <p className="mt-2 text-sm text-[var(--muted)]">{subtitle}</p>}

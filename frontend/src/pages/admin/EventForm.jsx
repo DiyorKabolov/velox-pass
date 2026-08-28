@@ -32,10 +32,10 @@ export default function EventForm() {
     onSuccess: (event) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'events'] })
       queryClient.invalidateQueries({ queryKey: ['events'] })
-      toast.success(`"${event.title}" created`)
+      toast.success(`Мероприятие «${event.title}» создано`)
       navigate('/admin/events')
     },
-    onError: (error) => toast.error(apiError(error, 'Could not create the event')),
+    onError: (error) => toast.error(apiError(error, 'Не удалось создать мероприятие')),
   })
 
   const handleSubmit = (submitEvent) => {
@@ -51,26 +51,26 @@ export default function EventForm() {
   return (
     <div className="mx-auto max-w-6xl px-5 py-12">
       <nav
-        aria-label="Breadcrumb"
+        aria-label="Хлебные крошки"
         className="mb-6 flex items-center gap-1.5 text-sm text-[var(--muted)]"
       >
-        <Crumb to="/admin">Admin</Crumb>
+        <Crumb to="/admin">Админ</Crumb>
         <ChevronRight size={14} className="opacity-50" />
-        <Crumb to="/admin/events">Events</Crumb>
+        <Crumb to="/admin/events">Мероприятия</Crumb>
         <ChevronRight size={14} className="opacity-50" />
-        <Crumb>New Event</Crumb>
+        <Crumb>Новое мероприятие</Crumb>
       </nav>
 
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="font-display text-2xl tracking-tight">New event</h1>
+          <h1 className="font-display text-2xl tracking-tight">Новое мероприятие</h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            Colours picked here are baked into every ticket for this event.
+            Выбранные цвета попадут на каждый билет этого мероприятия.
           </p>
         </div>
         <Button variant="ghost" onClick={() => navigate('/admin/events')}>
           <ArrowLeft size={15} />
-          Back
+          Назад
         </Button>
       </header>
 
@@ -83,10 +83,10 @@ export default function EventForm() {
             variant="ghost"
             onClick={() => navigate('/admin/events')}
           >
-            Cancel
+            Отмена
           </Button>
           <Button type="submit" loading={create.isPending}>
-            Create event
+            Создать мероприятие
           </Button>
         </div>
       </form>

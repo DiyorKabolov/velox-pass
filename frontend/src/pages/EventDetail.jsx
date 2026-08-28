@@ -1,11 +1,15 @@
-import { ArrowLeft, CalendarDays, MapPin, Users } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeft, Armchair, CalendarDays, MapPin, Users } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { getEventSessions } from '../api/events'
 import { useEvent } from '../hooks/useEvents'
+import SeatBookingModal from '../components/seats/SeatBookingModal'
 import { useBuyTicket } from '../hooks/useTickets'
 import useAuth from '../hooks/useAuth'
-import { formatDate, isExpired } from '../utils/dates'
-import { getCardColors } from '../utils/colors'
+import { formatDate, formatDateTime, isExpired } from '../utils/dates'
+import { getCardColors, withAlpha } from '../utils/colors'
 import Button from '../components/ui/Button'
 
 export default function EventDetail() {
@@ -14,6 +18,15 @@ export default function EventDetail() {
   const { isAuthenticated } = useAuth()
   const { data: event, isLoading, isError } = useEvent(id)
   const buy = useBuyTicket()
+
+  const [pickingSession, setPickingSession] = useState(null)
+
+  // Only seated events have showings to choose from.
+  const { data: sessions, refetch: refetchSessions } = useQuery({
+    queryKey: ['events', id, 'sessions'],
+    queryFn: () => getEventSessions(id),
+    enabled: Boolean(event?.has_seats),
+  })
 
   if (isLoading) {
     return (
@@ -26,9 +39,9 @@ export default function EventDetail() {
   if (isError || !event) {
     return (
       <div className="mx-auto max-w-5xl px-5 py-20 text-center">
-        <p className="text-sm text-[var(--err)]">Event not found.</p>
+        <p className="text-sm text-[var(--err)]">Мероприятие не найдено.</p>
         <Link to="/" className="mt-4 inline-block text-sm text-[var(--accent)]">
-          Back to events
+          Вернуться в афишу
         </Link>
       </div>
     )
@@ -40,19 +53,21 @@ export default function EventDetail() {
   const soldOut = event.capacity > 0 && sold >= event.capacity
   const canBuy = !past && !soldOut
 
+  const requireSignIn = () => {
+    if (isAuthenticated) return false
+    toast('Войдите, чтобы получить билет')
+    navigate('/login')
+    return true
+  }
+
   const handleBuy = () => {
-    if (!isAuthenticated) {
-      toast('Sign in to buy a ticket')
-      navigate('/login')
-      return
-    }
-    if (event.has_seats) {
-      toast('This event needs a seat — seat picker is on the event page')
-    }
-    buy.mutate(
-      { eventId: event.id },
-      { onSuccess: () => navigate('/cabinet') },
-    )
+    if (requireSignIn()) return
+    buy.mutate({ eventId: event.id }, { onSuccess: () => navigate('/cabinet') })
+  }
+
+  const openSeatPicker = (session) => {
+    if (requireSignIn()) return
+    setPickingSession(session)
   }
 
   return (
@@ -61,13 +76,13 @@ export default function EventDetail() {
         to="/"
         className="mb-8 inline-flex items-center gap-2 text-sm text-[var(--muted)] transition-colors hover:text-[var(--text)]"
       >
-        <ArrowLeft size={15} /> All events
+        <ArrowLeft size={15} /> Вся афиша
       </Link>
 
       <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
           <p className="font-mono2 text-[11px] uppercase tracking-[0.24em] text-[var(--muted2)]">
-            {past ? 'Finished' : soldOut ? 'Sold out' : 'On sale'}
+            {past ? 'Завершено' : soldOut ? 'Мест нет' : 'В продаже'}
           </p>
           <h1 className="mt-3 font-display text-3xl leading-tight tracking-tight">
             {event.title}
@@ -87,7 +102,7 @@ export default function EventDetail() {
             {event.capacity > 0 && (
               <p className="flex items-center gap-2.5 text-[var(--muted)]">
                 <Users size={16} className="text-[var(--accent)]" />
-                {sold} of {event.capacity} tickets taken
+                {sold} из {event.capacity} билетов продано
               </p>
             )}
           </div>
@@ -125,25 +140,73 @@ export default function EventDetail() {
                 style={{ borderColor: 'rgba(0,0,0,0.16)' }}
               />
 
-              <Button
-                onClick={handleBuy}
-                loading={buy.isPending}
-                disabled={!canBuy}
-                className="w-full"
-                style={{ background: colors.accent, borderColor: colors.accent, color: colors.bg }}
-              >
-                {past ? 'Event finished' : soldOut ? 'Sold out' : 'Get ticket'}
-              </Button>
+              {event.has_seats ? (
+                <div className="space-y-2">
+                  <p className="mb-3 text-xs uppercase tracking-[0.12em] opacity-55">
+                    Сеансы
+                  </p>
+                  {sessions?.length ? (
+                    sessions.map((session) => (
+                      <button
+                        key={session.id}
+                        type="button"
+                        disabled={past || session.seats_free === 0}
+                        onClick={() => openSeatPicker(session)}
+                        className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-left text-sm transition-all duration-150 hover:brightness-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+                        style={{ background: withAlpha(colors.accent, 0.16) }}
+                      >
+                        <span>
+                          <span className="block font-medium">
+                            {formatDateTime(session.datetime)}
+                          </span>
+                          {session.hall_name && (
+                            <span className="text-xs opacity-60">{session.hall_name}</span>
+                          )}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5 font-mono2 text-xs opacity-70">
+                          <Armchair size={13} />
+                          {session.seats_free}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-sm opacity-55">Сеансы пока не назначены.</p>
+                  )}
+                </div>
+              ) : (
+                <>
+                <Button
+                  onClick={handleBuy}
+                  loading={buy.isPending}
+                  disabled={!canBuy}
+                  className="w-full"
+                  style={{ background: colors.accent, borderColor: colors.accent, color: colors.bg }}
+                >
+                  {past ? 'Мероприятие завершено' : soldOut ? 'Мест нет' : 'Получить билет'}
+                </Button>
 
-              {event.capacity > 0 && canBuy && (
-                <p className="mt-3 text-center font-mono2 text-[11px] opacity-50">
-                  {Math.max(event.capacity - sold, 0)} left
-                </p>
+                {event.capacity > 0 && canBuy && (
+                  <p className="mt-3 text-center font-mono2 text-[11px] opacity-50">
+                    свободно {Math.max(event.capacity - sold, 0)}
+                  </p>
+                )}
+                </>
               )}
             </div>
           </div>
         </aside>
       </div>
+
+      <SeatBookingModal
+        open={Boolean(pickingSession)}
+        session={pickingSession}
+        eventId={event.id}
+        onClose={() => setPickingSession(null)}
+        onBooked={() => {
+          refetchSessions()
+          navigate('/cabinet')
+        }}
+      />
     </div>
   )
 }

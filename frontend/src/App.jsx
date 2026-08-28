@@ -13,6 +13,8 @@ import Scanner from './pages/Scanner'
 import Dashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
 import AdminEventForm from './pages/admin/EventForm'
+import AdminVenues from './pages/admin/Venues'
+import AdminSessions from './pages/admin/Sessions'
 import AdminTickets from './pages/admin/Tickets'
 import AdminUsers from './pages/admin/Users'
 
@@ -131,6 +133,22 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminEventForm />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/venues"
+            element={
+              <AdminRoute>
+                <AdminVenues />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/sessions"
+            element={
+              <AdminRoute>
+                <AdminSessions />
               </AdminRoute>
             }
           />

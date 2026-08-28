@@ -22,13 +22,13 @@ export default function Login() {
     try {
       const data = await loginRequest(form.email, form.password)
       setAuth(data.user, data.access_token)
-      toast.success(`Welcome back, ${data.user.username}`)
+      toast.success(`С возвращением, ${data.user.username}`)
       navigate('/')
     } catch (error) {
-      const message = apiError(error, 'Could not sign in')
+      const message = apiError(error, 'Не удалось войти')
       toast.error(message)
       // An unconfirmed account should land on the code screen, not stay stuck.
-      if (message.toLowerCase().includes('not confirmed')) {
+      if (message.toLowerCase().includes('не подтверждён')) {
         navigate('/confirm', { state: { email: form.email } })
       }
     } finally {
@@ -43,12 +43,12 @@ export default function Login() {
           <p className="font-display text-[11px] tracking-[0.18em] text-[var(--accent)]">
             VELOX·PASS
           </p>
-          <h1 className="mt-3 font-display text-xl">Sign in</h1>
+          <h1 className="mt-3 font-display text-xl">С возвращением</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
-            label="Username or email"
+            label="Email или имя пользователя"
             name="email"
             autoComplete="username"
             placeholder="admin@veloxpass.com"
@@ -57,7 +57,7 @@ export default function Login() {
             required
           />
           <Input
-            label="Password"
+            label="Пароль"
             name="password"
             type="password"
             autoComplete="current-password"
@@ -67,14 +67,14 @@ export default function Login() {
             required
           />
           <Button type="submit" loading={loading} className="w-full" size="lg">
-            Sign in
+            Войти
           </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-[var(--muted)]">
-          No account yet?{' '}
+          Нет аккаунта?{' '}
           <Link to="/register" className="text-[var(--accent)] hover:underline">
-            Create one
+            Зарегистрироваться
           </Link>
         </p>
       </div>
