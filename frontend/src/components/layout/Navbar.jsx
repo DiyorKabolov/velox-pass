@@ -54,7 +54,10 @@ export default function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--bg)]/92 backdrop-blur">
+    // Background, blur and hairline come from .navbar-surface in index.css;
+    // Tailwind cannot express a translucent var() colour. z-40 keeps the bar
+    // above page content but below the scanner overlay (z-50) and modals (z-60).
+    <header className="navbar-surface sticky top-0 z-40">
       {/* mr-auto on the logo pushes tabs and actions together on the right. */}
       <nav className="mx-auto flex h-16 max-w-6xl items-center gap-1 px-4 sm:gap-2 sm:px-5">
         <Link

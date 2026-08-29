@@ -4,6 +4,10 @@
 
 :root {
   --bg: #1a1c1e;
+  /* The same colour as --bg, as channels. Needed because the sticky navbar and
+     footer are translucent, and an alpha variant cannot be derived from a hex
+     custom property -- see .navbar-surface below for why not in Tailwind. */
+  --bg-rgb: 26 28 30;
   --surface: #22252a;
   --surface2: #2a2e34;
   --border: #32373f;
@@ -45,6 +49,46 @@ body {
 @layer utilities {
   .font-display { font-family: 'Unbounded', sans-serif; }
   .font-mono2 { font-family: 'JetBrains Mono', monospace; }
+}
+
+/* Sticky navbar and fixed footer.
+
+   These were written as `bg-[var(--bg)]/92 backdrop-blur`, which Tailwind
+   silently compiled to nothing at all, leaving both bars fully transparent --
+   the blur alone cannot stop scrolled text being read through them. Two
+   independent reasons, either of which is enough to drop the utility:
+
+     * 92 is not on Tailwind's opacity scale, which goes in steps of five, so
+       `/92` is not a recognised modifier (`/90` or `/[0.92]` would be);
+     * an opacity modifier cannot be applied to an arbitrary `var()` colour at
+       all -- Tailwind has to split the colour into channels to add an alpha to
+       it, and it cannot see inside a custom property. Even `bg-[var(--bg)]/90`
+       produces no rule.
+
+   Hence plain CSS, where the alpha is composed from --bg-rgb by hand. The
+   background is opaque enough to read over on its own; the blur is a garnish,
+   and browsers without backdrop-filter fall back to the flat colour. */
+@layer components {
+  .navbar-surface {
+    background: rgb(var(--bg-rgb) / 0.92);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .footer-surface {
+    background: rgb(var(--bg-rgb) / 0.95);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .navbar-surface,
+    .footer-surface {
+      background: var(--bg);
+    }
+  }
 }
 
 /* Scrollbar tuned to the dark surface palette. */

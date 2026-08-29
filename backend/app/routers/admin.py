@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.deps import ROLE_RANK, require_superadmin
 from app.models.event import Event
+from app.models.seat import Seat
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.schemas.event import EventCreate, EventOut, EventUpdate
@@ -127,7 +128,10 @@ async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
 async def admin_tickets(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Ticket)
-        .options(selectinload(Ticket.event), selectinload(Ticket.seat))
+        .options(
+            selectinload(Ticket.event),
+            selectinload(Ticket.seat).selectinload(Seat.hall),
+        )
         .order_by(Ticket.created_at.desc())
     )
     return [ticket_service.serialize_ticket(t) for t in result.scalars().all()]

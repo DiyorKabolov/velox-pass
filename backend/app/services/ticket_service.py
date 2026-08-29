@@ -46,6 +46,8 @@ def serialize_ticket(ticket: Ticket) -> TicketOut:
     """Flatten the event / seat relations the UI needs onto the ticket payload."""
     event = ticket.event
     seat = ticket.seat
+    # Every caller eager-loads seat.hall, so this never lazy-loads.
+    hall = seat.hall if seat else None
     return TicketOut(
         id=ticket.id,
         ticket_id=ticket.ticket_id,
@@ -61,6 +63,7 @@ def serialize_ticket(ticket: Ticket) -> TicketOut:
         event_date=event.date if event else None,
         event_location=event.location if event else None,
         seat_label=(seat.label or f"R{seat.row} S{seat.col}") if seat else None,
+        hall_name=hall.name if hall else None,
         card_bg=event.card_bg if event else None,
         card_accent=event.card_accent if event else None,
         card_text=event.card_text if event else None,
@@ -133,7 +136,12 @@ async def generate_ticket(
     # Reload with relations so serialization happens in one place.
     result = await db.execute(
         select(Ticket)
-        .options(selectinload(Ticket.event), selectinload(Ticket.seat))
+        .options(
+            selectinload(Ticket.event),
+            # .hall as well: serialize_ticket reads the hall name, and a lazy
+            # load of it inside async code raises MissingGreenlet.
+            selectinload(Ticket.seat).selectinload(Seat.hall),
+        )
         .where(Ticket.id == ticket.id)
     )
     return result.scalar_one()
@@ -142,7 +150,12 @@ async def generate_ticket(
 async def get_user_tickets(db: AsyncSession, user_id: int) -> list[Ticket]:
     result = await db.execute(
         select(Ticket)
-        .options(selectinload(Ticket.event), selectinload(Ticket.seat))
+        .options(
+            selectinload(Ticket.event),
+            # .hall as well: serialize_ticket reads the hall name, and a lazy
+            # load of it inside async code raises MissingGreenlet.
+            selectinload(Ticket.seat).selectinload(Seat.hall),
+        )
         .where(Ticket.user_id == user_id)
         .order_by(Ticket.created_at.desc())
     )
@@ -155,7 +168,12 @@ async def get_ticket_by_public_id(db: AsyncSession, ticket_id: str) -> Ticket | 
     ticket_id = (ticket_id or "").strip().rstrip("/").split("/")[-1]
     result = await db.execute(
         select(Ticket)
-        .options(selectinload(Ticket.event), selectinload(Ticket.seat))
+        .options(
+            selectinload(Ticket.event),
+            # .hall as well: serialize_ticket reads the hall name, and a lazy
+            # load of it inside async code raises MissingGreenlet.
+            selectinload(Ticket.seat).selectinload(Seat.hall),
+        )
         .where(Ticket.ticket_id == ticket_id)
     )
     return result.scalar_one_or_none()

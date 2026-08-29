@@ -1,19 +1,37 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Armchair, CalendarDays, Clock, MapPin } from 'lucide-react'
+import { CalendarDays, Clock, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { downloadPdf, fetchQrBlobUrl } from '../../api/tickets'
 import { formatDateTime, formatIsoDate, isExpired } from '../../utils/dates'
 import { getTicketColors, readableOn, withAlpha } from '../../utils/colors'
+import TruncatedText from '../ui/TruncatedText'
 
-// Fixed so the card never changes size when its state changes. Sized for the
-// tallest content -- a two-line title plus the extra seat row -- because the
-// body is centred, so anything taller spills out of the card and the title
-// ends up invisible against the page behind it.
-const CARD_HEIGHT = 268
+// Fixed so the card never changes size when its state changes, and sized for
+// the tallest content -- a two-line title above the three detail rows. The
+// body is centred, so content taller than this spills out of the card on both
+// sides and the title ends up invisible against the page behind it.
+//
+// At the sm breakpoint that worst case measures 234px: 48 padding + 32 gaps +
+// 55 title (2 x 22px at leading-tight) + 68 details (3 x 16px icon rows +
+// 2 x 10px gaps) + 31 id row. Every one of those line-heights is set
+// explicitly, so the total does not drift with the webfont.
+const CARD_HEIGHT = 244
 const TEAR_WIDTH = 22
-const TEETH = 13
+// Must stay EVEN. The teeth alternate valley / peak, so an odd count ends the
+// seam on a peak while it started in a valley -- the two ends of the tear then
+// sit 13.64px apart horizontally, and the notch punched at each end follows,
+// leaving the top one visibly left of the bottom one.
+const TEETH = 14
 // How deep the teeth bite into each half, as a share of the tear width.
 const AMPLITUDE = 62
+// How far a tooth reaches out of its half, in px.
+const TOOTH = (TEAR_WIDTH * AMPLITUDE) / 100
+// Diameter of the punched holes at either end of the perforation.
+const NOTCH = 18
+// A scanned ticket is drained of colour. This lives on the two halves rather
+// than on the whole card, so the notches painted over them stay the exact
+// colour of the page.
+const SPENT = 'grayscale(0.92) brightness(0.94)'
 
 const STATES = {
   valid: { label: 'Активен', color: '#2f7d4f' },
@@ -21,7 +39,11 @@ const STATES = {
   used: { label: 'Погашен', color: '#5f6570' },
 }
 
-const zig = (i) => (i % 2 === 0 ? 0 : AMPLITUDE)
+// Starts and ends on a PEAK, not in a valley. The notch at each end of the
+// tear is welded to the seam, so this is what decides where the pair sits:
+// on a peak they land 13.64px further right, close to where the perforation
+// ran on the intact ticket, instead of set back into the card.
+const zig = (i) => (i % 2 === 0 ? AMPLITUDE : 0)
 const seamPoints = () =>
   Array.from(
     { length: TEETH + 1 },
@@ -83,20 +105,126 @@ function tearAngles(ticketId) {
   return { body, stub: body + spread }
 }
 
+/** Trimmed string, or null for null / undefined / blank. */
+const clean = (value) => {
+  const text = String(value ?? '').trim()
+  return text || null
+}
+
 /**
- * "J14" -> "Ряд J · Место 14". Anything that does not match the row-letter
- * scheme is shown exactly as it came from the API.
+ * Venue, hall and seat on one line: "Большой зал · Партер · Место A14".
+ * Missing parts are dropped rather than leaving stray separators, so a ticket
+ * without a seat still reads as plain "Большой зал".
  */
-function seatText(label) {
-  const parts = String(label ?? '').match(/^([A-Za-z]+)(\d+)$/)
-  return parts ? `Ряд ${parts[1]} · Место ${parts[2]}` : label
+function placeLine(ticket) {
+  const seat = clean(ticket.seat_label)
+  return [clean(ticket.event_location), clean(ticket.hall_name), seat && `Место ${seat}`]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/**
+ * Where the tear meets the top and bottom edges, measured from the tear-side
+ * edge of the half's own box. zig() is in the mask's percentage units, so it
+ * is scaled back into the pixels the strip is actually painted at.
+ */
+const seamAt = (i) => (zig(i) / 100) * TEAR_WIDTH
+
+/**
+ * The holes punched through both ends of the perforation, kept visible after
+ * the ticket is torn.
+ *
+ * They are painted over the halves in the page colour rather than cut out of
+ * them. A hole would have to be composited into the very mask that carves the
+ * zigzag, and anything nested inside a half is clipped away by that mask
+ * before it can be seen -- which is why they vanished on a torn ticket.
+ *
+ * The overlay repeats the halves' own flex layout and tilts, so each disc
+ * stays welded to its edge of the tear. The offsets are not the box corners:
+ * the mask stops the body short of its box by between TEAR_WIDTH and
+ * TEAR_WIDTH - peak, so the discs follow the seam instead.
+ */
+function TearNotches({ tilt }) {
+  // Size inline, not as h-[..] w-[..]: a class built from a template literal is
+  // invisible to Tailwind's source scan and would compile to nothing.
+  const disc = 'absolute rounded-full'
+  const skin = { background: 'var(--bg)', width: NOTCH, height: NOTCH }
+  const edge = -NOTCH / 2
+  const bodyRight = (i) => TEAR_WIDTH - seamAt(i) - NOTCH / 2
+  const stubLeft = (i) => seamAt(i) - NOTCH / 2
+
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 z-10 flex">
+      <div
+        className="relative min-w-0 flex-1"
+        style={{
+          transform: `rotate(${tilt.body.toFixed(2)}deg)`,
+          transformOrigin: 'center',
+        }}
+      >
+        <span className={disc} style={{ ...skin, top: edge, right: bodyRight(0) }} />
+        <span
+          className={disc}
+          style={{ ...skin, bottom: edge, right: bodyRight(TEETH) }}
+        />
+      </div>
+
+      <div
+        className="relative w-[118px] shrink-0 sm:w-[156px]"
+        style={{
+          marginLeft: 7,
+          transform: `rotate(${tilt.stub.toFixed(2)}deg)`,
+          transformOrigin: 'left center',
+        }}
+      >
+        <span className={disc} style={{ ...skin, top: edge, left: stubLeft(0) }} />
+        <span
+          className={disc}
+          style={{ ...skin, bottom: edge, left: stubLeft(TEETH) }}
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A wash of the other half's colour across the sawtooth, so the teeth read as
+ * pulled out of the opposite piece rather than printed that way: on an intact
+ * ticket the colours meet on a straight line, so a jagged tear has to carry a
+ * little of each side across to the other.
+ *
+ * It belongs inside the half, where the tear mask carves it to exactly the same
+ * teeth and the grayscale of a spent ticket reaches it too. It spans only the
+ * band the teeth sweep through -- running it out to the box edge would put it
+ * under the QR code on the stub.
+ */
+function ToothTint({ edge, color }) {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-y-0"
+      style={{
+        // Behind the copy: a positioned child would otherwise paint over it,
+        // and at the mobile padding the band reaches 2px into the text box. The
+        // half is a stacking context once torn, so this stays above its own
+        // background and cannot escape the card.
+        zIndex: -1,
+        width: TOOTH,
+        // The body's teeth grow towards its right edge but stop TEAR_WIDTH -
+        // TOOTH short of it; the stub's grow left and reach its edge exactly.
+        [edge]: edge === 'right' ? TEAR_WIDTH - TOOTH : 0,
+        // Full strength at the tips, gone by the roots.
+        background: `linear-gradient(to ${edge}, transparent, ${color})`,
+      }}
+    />
+  )
 }
 
 function InfoRow({ icon: Icon, children }) {
   return (
     <p className="flex items-center gap-2 text-[13px] leading-none opacity-60 sm:gap-2.5 sm:text-[15px]">
       <Icon size={16} strokeWidth={1.8} className="shrink-0 opacity-80" />
-      <span className="truncate">{children}</span>
+      <span className="min-w-0 flex-1">{children}</span>
     </p>
   )
 }
@@ -115,6 +243,10 @@ export default function TicketCard({ ticket }) {
       : STATES.valid
 
   const tilt = useMemo(() => tearAngles(ticket.ticket_id), [ticket.ticket_id])
+
+  // An event without a title would otherwise leave the card headless.
+  const title = clean(ticket.event_title) ?? 'Мероприятие'
+  const place = placeLine(ticket)
 
   const [qrSrc, setQrSrc] = useState(null)
   const [downloading, setDownloading] = useState(false)
@@ -156,39 +288,42 @@ export default function TicketCard({ ticket }) {
 
   return (
     // Padding leaves room for both halves to tilt out of the row when torn.
-    <article
-      className="relative w-full max-w-[540px] px-2 py-6"
-      style={{ filter: torn ? 'grayscale(0.92) brightness(0.94)' : 'none' }}
-    >
+    <article className="relative w-full max-w-[540px] px-2 py-6">
       {/* The card itself. Fixed height, so no state changes its size. */}
       <div className="relative flex" style={{ height: CARD_HEIGHT }}>
         {/* Body */}
         <div
-          className="flex min-w-0 flex-1 flex-col justify-center gap-3 py-5 pl-4 pr-5 sm:gap-4 sm:py-6 sm:pl-7 sm:pr-9"
+          className="relative flex min-w-0 flex-1 flex-col justify-center gap-3 py-5 pl-4 pr-5 sm:gap-4 sm:py-6 sm:pl-7 sm:pr-9"
           style={{
             background: colors.bg,
             color: colors.text,
             borderRadius: torn ? 18 : '18px 0 0 18px',
             transform: torn ? `rotate(${tilt.body.toFixed(2)}deg)` : 'none',
             transformOrigin: 'center',
+            filter: torn ? SPENT : 'none',
             ...(torn ? tearMask('right') : null),
           }}
         >
-          <h3 className="line-clamp-2 text-[18px] font-extrabold leading-tight sm:text-[22px]">
-            {ticket.event_title ?? 'Событие'}
+          {torn && <ToothTint edge="right" color={colors.accent} />}
+
+          <h3 className="text-[18px] font-extrabold leading-tight sm:text-[22px]">
+            <TruncatedText text={title} maxLines={2} />
           </h3>
 
           <div className="flex flex-col gap-2.5">
-            <InfoRow icon={CalendarDays}>{formatDateTime(ticket.event_date)}</InfoRow>
-            {ticket.event_location && (
-              <InfoRow icon={MapPin}>{ticket.event_location}</InfoRow>
-            )}
-            {ticket.seat_label && (
-              <InfoRow icon={Armchair}>
-                <strong className="font-semibold">{seatText(ticket.seat_label)}</strong>
+            <InfoRow icon={CalendarDays}>
+              <span className="block truncate">{formatDateTime(ticket.event_date)}</span>
+            </InfoRow>
+            {place && (
+              <InfoRow icon={MapPin}>
+                <TruncatedText text={place} />
               </InfoRow>
             )}
-            <InfoRow icon={Clock}>Получен {formatIsoDate(ticket.created_at)}</InfoRow>
+            <InfoRow icon={Clock}>
+              <span className="block truncate">
+                Получен {formatIsoDate(ticket.created_at)}
+              </span>
+            </InfoRow>
           </div>
 
           {/* Id, download and state share one row so the height stays constant. */}
@@ -239,9 +374,12 @@ export default function TicketCard({ ticket }) {
             marginLeft: torn ? 7 : 0,
             transform: torn ? `rotate(${tilt.stub.toFixed(2)}deg)` : 'none',
             transformOrigin: 'left center',
+            filter: torn ? SPENT : 'none',
             ...(torn ? tearMask('left') : null),
           }}
         >
+          {torn && <ToothTint edge="left" color={colors.bg} />}
+
           <div className="flex h-[86px] w-[86px] items-center justify-center rounded-xl bg-white p-1 sm:h-[104px] sm:w-[104px] sm:p-1.5">
             {qrSrc ? (
               <img
@@ -254,18 +392,16 @@ export default function TicketCard({ ticket }) {
             )}
           </div>
 
-          {ticket.seat_label ? (
-            <p className="text-center text-[11px] font-bold uppercase leading-tight tracking-[0.08em]">
-              {ticket.seat_label}
-            </p>
-          ) : (
-            <p className="text-center text-[10px] font-semibold uppercase leading-[1.4] tracking-[0.12em] opacity-85">
-              Покажите
-              <br />
-              при входе
-            </p>
-          )}
+          {/* Always the call to action -- the seat is spelled out in full on
+              the body's location line, so repeating it here says nothing new. */}
+          <p className="text-center text-[10px] font-semibold uppercase leading-[1.4] tracking-[0.12em] opacity-85">
+            Покажите
+            <br />
+            при входе
+          </p>
         </div>
+
+        {torn && <TearNotches tilt={tilt} />}
 
         {/* Intact perforation. Anchored to the stub's own left edge rather than
             a fixed offset, so it tracks the stub when its width changes at the

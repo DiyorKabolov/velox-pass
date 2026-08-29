@@ -22,6 +22,7 @@ class TicketOut(BaseModel):
     event_date: datetime | None = None
     event_location: str | None = None
     seat_label: str | None = None
+    hall_name: str | None = None
     card_bg: str | None = None
     card_accent: str | None = None
     card_text: str | None = None

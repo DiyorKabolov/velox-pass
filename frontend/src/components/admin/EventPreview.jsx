@@ -10,7 +10,9 @@ export default function EventPreview({ form }) {
   const { card_bg: bg, card_accent: accent, card_text: text } = form
 
   return (
-    <div className="sticky top-4">
+    // top-20 clears the 64px navbar; at top-4 the preview parked itself
+    // behind the bar as soon as the form was scrolled.
+    <div className="sticky top-20">
       <p className="mb-3 font-mono2 text-[10px] uppercase tracking-[0.16em] text-[var(--muted2)]">
         Предпросмотр
       </p>
