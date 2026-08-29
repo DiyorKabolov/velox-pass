@@ -16,7 +16,19 @@ import TruncatedText from '../ui/TruncatedText'
 // 2 x 10px gaps) + 31 id row. Every one of those line-heights is set
 // explicitly, so the total does not drift with the webfont.
 const CARD_HEIGHT = 244
-const TEAR_WIDTH = 22
+// Width of the tear and how far the halves are pushed apart. Together they are
+// the gap between the two torn edges -- and the notch punched at each edge is
+// welded to it, so that same total is exactly how far the pair ends up
+// straddling the line the perforation ran on. Shrinking these is the only way
+// to bring the notches back towards it; the cost is a shallower zigzag and a
+// tighter gap.
+const TEAR_WIDTH = 14
+const SPLIT = 4
+// Nudges the whole tear towards the stub. Without it the seam is pinned to the
+// inner end of the strip, which leaves the torn edge sitting left of the line
+// the perforation ran on. Must not exceed TEAR_WIDTH - TOOTH (5.32px): beyond
+// that the tips of the teeth run past the half's own box and get clipped flat.
+const TEAR_SHIFT = 4
 // Must stay EVEN. The teeth alternate valley / peak, so an odd count ends the
 // seam on a peak while it started in a valley -- the two ends of the tear then
 // sit 13.64px apart horizontally, and the notch punched at each end follows,
@@ -26,6 +38,10 @@ const TEETH = 14
 const AMPLITUDE = 62
 // How far a tooth reaches out of its half, in px.
 const TOOTH = (TEAR_WIDTH * AMPLITUDE) / 100
+// How much of that reach, measured back from the point, carries the other
+// half's colour. A share rather than a fixed width, so it keeps its proportions
+// if the tear is ever made deeper or shallower.
+const TIP = TOOTH * 0.4
 // Diameter of the punched holes at either end of the perforation.
 const NOTCH = 18
 // A scanned ticket is drained of colour. This lives on the two halves rather
@@ -39,11 +55,13 @@ const STATES = {
   used: { label: 'Погашен', color: '#5f6570' },
 }
 
-// Starts and ends on a PEAK, not in a valley. The notch at each end of the
-// tear is welded to the seam, so this is what decides where the pair sits:
-// on a peak they land 13.64px further right, close to where the perforation
-// ran on the intact ticket, instead of set back into the card.
-const zig = (i) => (i % 2 === 0 ? AMPLITUDE : 0)
+// Starts and ends on a PEAK, not in a valley: the notch at each end of the tear
+// is welded to the seam, so this is what decides where the pair sits. The shift
+// is folded in here, in the mask's own percentage units, so that everything
+// derived from the seam -- the notches and the colour carried onto the teeth --
+// follows it without being told about it separately.
+const zig = (i) =>
+  (i % 2 === 0 ? AMPLITUDE : 0) + (TEAR_SHIFT / TEAR_WIDTH) * 100
 const seamPoints = () =>
   Array.from(
     { length: TEETH + 1 },
@@ -150,8 +168,13 @@ function TearNotches({ tilt }) {
   const disc = 'absolute rounded-full'
   const skin = { background: 'var(--bg)', width: NOTCH, height: NOTCH }
   const edge = -NOTCH / 2
-  const bodyRight = (i) => TEAR_WIDTH - seamAt(i) - NOTCH / 2
-  const stubLeft = (i) => seamAt(i) - NOTCH / 2
+  // Punched on the colour boundary rather than on the point of the tooth. On an
+  // intact ticket the hole sits exactly where the two colours meet, so half of
+  // it should border each; anchored to the point instead, it swallowed the whole
+  // coloured tip. TIP back from the seam is that boundary.
+  const anchor = (i) => seamAt(i) - TIP
+  const bodyRight = (i) => TEAR_WIDTH - anchor(i) - NOTCH / 2
+  const stubLeft = (i) => anchor(i) - NOTCH / 2
 
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 z-10 flex">
@@ -172,7 +195,7 @@ function TearNotches({ tilt }) {
       <div
         className="relative w-[118px] shrink-0 sm:w-[156px]"
         style={{
-          marginLeft: 7,
+          marginLeft: SPLIT,
           transform: `rotate(${tilt.stub.toFixed(2)}deg)`,
           transformOrigin: 'left center',
         }}
@@ -188,15 +211,17 @@ function TearNotches({ tilt }) {
 }
 
 /**
- * A wash of the other half's colour across the sawtooth, so the teeth read as
+ * The other half's colour on the points of the teeth alone, so they read as
  * pulled out of the opposite piece rather than printed that way: on an intact
  * ticket the colours meet on a straight line, so a jagged tear has to carry a
  * little of each side across to the other.
  *
+ * Only the outermost TIP of each tooth is covered. The band is pinned to the
+ * pointed side -- the body's teeth grow towards its right edge, the stub's away
+ * from its left -- so narrowing it eats back from the root, never the point.
+ *
  * It belongs inside the half, where the tear mask carves it to exactly the same
- * teeth and the grayscale of a spent ticket reaches it too. It spans only the
- * band the teeth sweep through -- running it out to the box edge would put it
- * under the QR code on the stub.
+ * teeth and the grayscale of a spent ticket reaches it too.
  */
 function ToothTint({ edge, color }) {
   return (
@@ -209,12 +234,12 @@ function ToothTint({ edge, color }) {
         // half is a stacking context once torn, so this stays above its own
         // background and cannot escape the card.
         zIndex: -1,
-        width: TOOTH,
-        // The body's teeth grow towards its right edge but stop TEAR_WIDTH -
-        // TOOTH short of it; the stub's grow left and reach its edge exactly.
-        [edge]: edge === 'right' ? TEAR_WIDTH - TOOTH : 0,
-        // Full strength at the tips, gone by the roots.
-        background: `linear-gradient(to ${edge}, transparent, ${color})`,
+        width: TIP,
+        // The band the teeth sweep through, which the shift carries along.
+        [edge]: edge === 'right' ? TEAR_WIDTH - TOOTH - TEAR_SHIFT : TEAR_SHIFT,
+        // A clean edge, not a fade: on an intact ticket the two colours meet on a
+        // straight printed line, and this is that line carried onto the teeth.
+        background: color,
       }}
     />
   )
@@ -371,7 +396,7 @@ export default function TicketCard({ ticket }) {
             background: colors.accent,
             color: stubText,
             borderRadius: torn ? 18 : '0 18px 18px 0',
-            marginLeft: torn ? 7 : 0,
+            marginLeft: torn ? SPLIT : 0,
             transform: torn ? `rotate(${tilt.stub.toFixed(2)}deg)` : 'none',
             transformOrigin: 'left center',
             filter: torn ? SPENT : 'none',
