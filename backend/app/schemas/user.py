@@ -32,6 +32,24 @@ class UserRoleUpdate(BaseModel):
     role: str
 
 
+class VenueStaffAssign(BaseModel):
+    """Grant one user a venue-scoped role."""
+
+    user_id: int
+    role: str = Field(pattern="^(venue_admin|scanner)$")
+
+
+class VenueStaffOut(BaseModel):
+    user_id: int
+    username: str
+    email: EmailStr
+    # The grant on this venue.
+    role: str
+    # The account-wide role, which the navbar and route guards read. Shown so an
+    # admin can see when the two disagree.
+    global_role: str
+
+
 class VerifyRequest(BaseModel):
     email: EmailStr
     code: str = Field(min_length=6, max_length=6)

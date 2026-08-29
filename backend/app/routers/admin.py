@@ -8,11 +8,18 @@ from app.core.database import get_db
 from app.core.deps import ROLE_RANK, require_superadmin
 from app.models.event import Event
 from app.models.seat import Seat
+from app.models.user_venue_role import UserVenueRole
+from app.models.venue import Venue
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.schemas.event import EventCreate, EventOut, EventUpdate
 from app.schemas.ticket import TicketOut
-from app.schemas.user import UserOut, UserRoleUpdate
+from app.schemas.user import (
+    UserOut,
+    UserRoleUpdate,
+    VenueStaffAssign,
+    VenueStaffOut,
+)
 from app.services import ticket_service
 
 router = APIRouter(
@@ -135,3 +142,115 @@ async def admin_tickets(db: AsyncSession = Depends(get_db)):
         .order_by(Ticket.created_at.desc())
     )
     return [ticket_service.serialize_ticket(t) for t in result.scalars().all()]
+
+
+# --- venue staff ----------------------------------------------------------
+# Scoped grants live in user_venue_roles; the account-wide users.role column is
+# what the navbar and the route guards actually read. The two are kept in step
+# here, because a grant nobody can act on would be worse than no grant at all.
+
+
+async def _require_venue(db: AsyncSession, venue_id: int) -> Venue:
+    venue = await db.get(Venue, venue_id)
+    if not venue:
+        raise HTTPException(status_code=404, detail="Площадка не найдена")
+    return venue
+
+
+@router.get("/venues/{venue_id}/staff", response_model=list[VenueStaffOut])
+async def venue_staff(venue_id: int, db: AsyncSession = Depends(get_db)):
+    await _require_venue(db, venue_id)
+    result = await db.execute(
+        select(UserVenueRole, User)
+        .join(User, User.id == UserVenueRole.user_id)
+        .where(UserVenueRole.venue_id == venue_id)
+        .order_by(User.username)
+    )
+    return [
+        VenueStaffOut(
+            user_id=user.id,
+            username=user.username,
+            email=user.email,
+            role=grant.role,
+            global_role=user.role,
+        )
+        for grant, user in result.all()
+    ]
+
+
+@router.post("/venues/{venue_id}/assign", response_model=VenueStaffOut, status_code=201)
+async def assign_venue_staff(
+    venue_id: int,
+    data: VenueStaffAssign,
+    db: AsyncSession = Depends(get_db),
+):
+    """Grant a venue-scoped role, replacing any existing grant on this venue."""
+    await _require_venue(db, venue_id)
+
+    user = await db.get(User, data.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    if user.role == "superadmin":
+        raise HTTPException(
+            status_code=400,
+            detail="Суперадмин и так управляет всеми площадками",
+        )
+
+    existing = await db.scalar(
+        select(UserVenueRole).where(
+            UserVenueRole.user_id == user.id, UserVenueRole.venue_id == venue_id
+        )
+    )
+    if existing:
+        # One grant per user per venue -- the table enforces it, so a repeat
+        # assignment changes the role rather than failing on the constraint.
+        existing.role = data.role
+        grant = existing
+    else:
+        grant = UserVenueRole(user_id=user.id, venue_id=venue_id, role=data.role)
+        db.add(grant)
+
+    # Lift the account-wide role to match, or the grant would be invisible: the
+    # navbar and the route guards read users.role, not this table.
+    if ROLE_RANK.get(user.role, 0) < ROLE_RANK.get(data.role, 0):
+        user.role = data.role
+
+    await db.flush()
+    return VenueStaffOut(
+        user_id=user.id,
+        username=user.username,
+        email=user.email,
+        role=grant.role,
+        global_role=user.role,
+    )
+
+
+@router.delete("/venues/{venue_id}/staff/{user_id}", status_code=204)
+async def remove_venue_staff(
+    venue_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    await _require_venue(db, venue_id)
+
+    grant = await db.scalar(
+        select(UserVenueRole).where(
+            UserVenueRole.user_id == user_id, UserVenueRole.venue_id == venue_id
+        )
+    )
+    if not grant:
+        raise HTTPException(status_code=404, detail="Назначение не найдено")
+    await db.delete(grant)
+    await db.flush()
+
+    # Revoking the last grant has to take the account-wide role back down too,
+    # or the user keeps the scanner tab and the staff endpoints for every venue.
+    user = await db.get(User, user_id)
+    if user and user.role in ("venue_admin", "scanner"):
+        left = await db.scalar(
+            select(func.count(UserVenueRole.id)).where(
+                UserVenueRole.user_id == user_id
+            )
+        )
+        if not left:
+            user.role = "user"

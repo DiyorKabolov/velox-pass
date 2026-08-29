@@ -1,4 +1,5 @@
 import Input from '../ui/Input'
+import { EVENT_TAGS, tagColor } from '../../utils/eventTags'
 import ColorField from './ColorField'
 import EventPreview from './EventPreview'
 import { COLOR_PRESETS, DEFAULT_COLORS } from './eventForm'
@@ -73,6 +74,50 @@ export default function EventEditor({ form, onChange }) {
         />
 
         <div className="pt-1">
+          <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+            Теги
+          </span>
+          {/* Pills rather than a dropdown: the whole vocabulary is ten items,
+              several may apply at once, and the choice reads at a glance. */}
+          <div className="mb-1 flex flex-wrap gap-2">
+            {EVENT_TAGS.map((tag) => {
+              const on = (form.tags ?? []).includes(tag)
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() =>
+                    set({
+                      tags: on
+                        ? (form.tags ?? []).filter((t) => t !== tag)
+                        : [...(form.tags ?? []), tag],
+                    })
+                  }
+                  className={[
+                    'rounded-full border px-3 py-1.5 text-xs transition-all duration-150',
+                    'active:scale-[0.95]',
+                    on ? 'font-medium' : 'text-[var(--muted)] hover:text-[var(--text)]',
+                  ].join(' ')}
+                  style={
+                    on
+                      ? {
+                          borderColor: tagColor(tag),
+                          background: `${tagColor(tag)}22`,
+                          color: tagColor(tag),
+                        }
+                      : { borderColor: 'var(--border)' }
+                  }
+                >
+                  {tag}
+                </button>
+              )
+            })}
+          </div>
+          <p className="mb-5 text-xs text-[var(--muted2)]">
+            По тегам зрители фильтруют афишу. Можно выбрать несколько.
+          </p>
+
           <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
             Цвета билета
           </span>

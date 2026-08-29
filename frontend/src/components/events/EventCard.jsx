@@ -3,6 +3,8 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { formatDate, isExpired } from '../../utils/dates'
 import { getCardColors } from '../../utils/colors'
+import { orderTags, tagColor } from '../../utils/eventTags'
+import { pluralize } from '../../utils/plural'
 
 // Used by the parent list to stagger cards in.
 export const cardVariants = {
@@ -14,9 +16,25 @@ export default function EventCard({ event }) {
   const colors = getCardColors(event)
   const past = isExpired(event.date)
   const sold = event.tickets_sold ?? 0
-  const capacity = event.capacity ?? 0
-  const fillPercent = capacity ? Math.min(Math.round((sold / capacity) * 100), 100) : 0
-  const soldOut = capacity > 0 && sold >= capacity
+  const tags = orderTags(event.tags)
+
+  // total_seats / available_seats are the fields to read for both kinds of
+  // event: for a seated one they come from the hall map of its live sessions,
+  // where event.capacity is 0 and would draw an empty bar; for an ordinary one
+  // the API mirrors capacity into them.
+  const total = event.total_seats ?? event.capacity ?? 0
+  // available_seats falls back to a figure derived from what the payload does
+  // carry, never to 0: a server that predates these fields would otherwise make
+  // every event read "0 мест свободно, 100%" -- a confident wrong number rather
+  // than a visibly missing one.
+  const available = event.available_seats ?? Math.max(total - sold, 0)
+  const taken = Math.max(total - available, 0)
+  const fillPercent = total ? Math.min(Math.round((taken / total) * 100), 100) : 0
+  // A seated event with no live session has nothing on sale, whatever its halls
+  // hold; an unseated one is sold out once the counter reaches capacity.
+  const soldOut = event.has_seats
+    ? event.has_active_session === false || (total > 0 && available <= 0)
+    : total > 0 && sold >= total
 
   return (
     <motion.div
@@ -33,27 +51,60 @@ export default function EventCard({ event }) {
       >
         <div className="h-1.5 w-full" style={{ background: colors.accent }} />
 
-        <div className="flex h-[210px] flex-col p-5">
+        {/* Fixed so every card in the row is the same height, and sized for the
+            tallest combination -- a two-line title plus a row of tags, 244.5px
+            of content in 20px padding. At the old 210px a two-line title alone
+            already overflowed by 7.5px; the flex children then shrank below
+            their own line height and the text ran over itself. */}
+        <div className="flex h-[252px] flex-col p-5">
           <span
-            className="mb-2 font-mono2 text-[10px] uppercase tracking-[0.14em]"
+            className="mb-2 shrink-0 font-mono2 text-[10px] uppercase tracking-[0.14em]"
             style={{ color: colors.accent }}
           >
             {past ? 'Завершено' : soldOut ? 'Мест нет' : 'В продаже'}
           </span>
 
-          <h3 className="font-display text-lg leading-snug line-clamp-2">{event.title}</h3>
+          <h3 className="shrink-0 font-display text-lg leading-snug line-clamp-2">
+            {event.title}
+          </h3>
 
-          <p className="mt-2 text-sm opacity-70">{formatDate(event.date)}</p>
+          {tags.length > 0 && (
+            // One row, never two: the card's height is fixed, so a wrapping
+            // second row of tags would push the rest of the content out of it.
+            // Anything past the first two is counted instead, and the full set
+            // is on the event page.
+            <div className="mt-2 flex shrink-0 flex-nowrap gap-1">
+              {tags.slice(0, 2).map((tag) => (
+                <span
+                  key={tag}
+                  className="truncate rounded-full px-2 py-0.5 text-[10px] font-medium"
+                  style={{ background: `${tagColor(tag)}33`, color: colors.text }}
+                >
+                  {tag}
+                </span>
+              ))}
+              {tags.length > 2 && (
+                <span
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium opacity-60"
+                  style={{ background: `${colors.accent}22` }}
+                >
+                  +{tags.length - 2}
+                </span>
+              )}
+            </div>
+          )}
+
+          <p className="mt-2 shrink-0 text-sm opacity-70">{formatDate(event.date)}</p>
           {event.location && (
-            <p className="mt-0.5 truncate text-sm opacity-55">{event.location}</p>
+            <p className="mt-0.5 shrink-0 truncate text-sm opacity-55">{event.location}</p>
           )}
 
           <div className="mt-auto">
-            {capacity > 0 && (
+            {total > 0 && (
               <div className="mb-3">
                 <div className="mb-1 flex justify-between font-mono2 text-[10px] opacity-60">
                   <span>
-                    {sold} / {capacity}
+                    {pluralize(available, 'место', 'места', 'мест')} свободно
                   </span>
                   <span>{fillPercent}%</span>
                 </div>

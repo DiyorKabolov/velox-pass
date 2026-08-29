@@ -14,6 +14,8 @@ import {
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
+import Select from '../../components/ui/Select'
+import VenueStaff from '../../components/admin/VenueStaff'
 import HallGridEditor, { gridToLayout, makeGrid } from '../../components/seats/HallGridEditor'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
@@ -226,6 +228,9 @@ export default function Venues() {
                   <tr key={`${venue.id}-halls`}>
                     <Td colSpan={6} className="bg-[var(--bg)] p-0">
                       <HallRows venueId={venue.id} onDeleted={(id) => removeHall.mutate(id)} />
+                      {/* Mounted only while the row is expanded, so the staff
+                          list is fetched for one venue at a time. */}
+                      <VenueStaff venueId={venue.id} />
                     </Td>
                   </tr>
                 ),
@@ -284,17 +289,15 @@ export default function Venues() {
               <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
                 Тип
               </span>
-              <select
+              <Select
                 value={venueForm.type}
-                onChange={(e) => setVenueForm({ ...venueForm, type: e.target.value })}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none transition-colors focus:border-[var(--accent)]"
-              >
-                {VENUE_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {VENUE_TYPE_LABELS[type] ?? type}
-                  </option>
-                ))}
-              </select>
+                onChange={(type) => setVenueForm({ ...venueForm, type })}
+                aria-label="Тип площадки"
+                options={VENUE_TYPES.map((type) => ({
+                  value: type,
+                  label: VENUE_TYPE_LABELS[type] ?? type,
+                }))}
+              />
             </label>
             <Input
               label="Адрес"

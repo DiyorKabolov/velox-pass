@@ -1,4 +1,5 @@
 import { fromDatetimeLocal, toDatetimeLocal } from '../../utils/dates'
+import { orderTags } from '../../utils/eventTags'
 
 export const DEFAULT_COLORS = {
   card_bg: '#fdfdf5',
@@ -22,6 +23,7 @@ export const EMPTY_EVENT = {
   location: '',
   capacity: 0,
   has_seats: false,
+  tags: [],
   ...DEFAULT_COLORS,
 }
 
@@ -35,6 +37,7 @@ export function toFormValue(event) {
     location: event.location ?? '',
     capacity: event.capacity ?? 0,
     has_seats: Boolean(event.has_seats),
+    tags: orderTags(event.tags),
     card_bg: event.card_bg || DEFAULT_COLORS.card_bg,
     card_accent: event.card_accent || DEFAULT_COLORS.card_accent,
     card_text: event.card_text || DEFAULT_COLORS.card_text,
@@ -50,6 +53,9 @@ export function toPayload(form) {
     location: form.location.trim() || null,
     capacity: Number(form.capacity) || 0,
     has_seats: Boolean(form.has_seats),
+    // Ordered here too: the API normalises anyway, and sending them sorted
+    // keeps the request identical for the same set of choices.
+    tags: orderTags(form.tags),
     card_bg: form.card_bg,
     card_accent: form.card_accent,
     card_text: form.card_text,

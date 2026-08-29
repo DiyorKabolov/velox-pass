@@ -10,6 +10,8 @@ import { useBuyTicket } from '../hooks/useTickets'
 import useAuth from '../hooks/useAuth'
 import { formatDate, formatDateTime, isExpired } from '../utils/dates'
 import { getCardColors, withAlpha } from '../utils/colors'
+import { orderTags, tagColor } from '../utils/eventTags'
+import { pluralize } from '../utils/plural'
 import Button from '../components/ui/Button'
 
 export default function EventDetail() {
@@ -50,7 +52,19 @@ export default function EventDetail() {
   const colors = getCardColors(event)
   const past = isExpired(event.date)
   const sold = event.tickets_sold ?? 0
-  const soldOut = event.capacity > 0 && sold >= event.capacity
+  const tags = orderTags(event.tags)
+
+  // Same pair of fields for both kinds of event: for a seated one they come
+  // from the hall map of its live sessions, where capacity is 0.
+  const total = event.total_seats ?? event.capacity ?? 0
+  // available_seats falls back to a figure derived from what the payload does
+  // carry, never to 0: a server that predates these fields would otherwise make
+  // every event read "0 мест свободно, 100%" -- a confident wrong number rather
+  // than a visibly missing one.
+  const available = event.available_seats ?? Math.max(total - sold, 0)
+  const soldOut = event.has_seats
+    ? event.has_active_session === false || (total > 0 && available <= 0)
+    : total > 0 && sold >= total
   const canBuy = !past && !soldOut
 
   const requireSignIn = () => {
@@ -88,6 +102,24 @@ export default function EventDetail() {
             {event.title}
           </h1>
 
+          {tags.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border px-3 py-1 text-xs"
+                  style={{
+                    borderColor: `${tagColor(tag)}55`,
+                    background: `${tagColor(tag)}1a`,
+                    color: tagColor(tag),
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
           <div className="mt-6 space-y-3 text-sm">
             <p className="flex items-center gap-2.5 text-[var(--muted)]">
               <CalendarDays size={16} className="text-[var(--accent)]" />
@@ -99,10 +131,10 @@ export default function EventDetail() {
                 {event.location}
               </p>
             )}
-            {event.capacity > 0 && (
+            {total > 0 && (
               <p className="flex items-center gap-2.5 text-[var(--muted)]">
                 <Users size={16} className="text-[var(--accent)]" />
-                {sold} из {event.capacity} билетов продано
+                {pluralize(available, 'место', 'места', 'мест')} свободно из {total}
               </p>
             )}
           </div>
@@ -185,9 +217,9 @@ export default function EventDetail() {
                   {past ? 'Мероприятие завершено' : soldOut ? 'Мест нет' : 'Получить билет'}
                 </Button>
 
-                {event.capacity > 0 && canBuy && (
+                {total > 0 && canBuy && (
                   <p className="mt-3 text-center font-mono2 text-[11px] opacity-50">
-                    свободно {Math.max(event.capacity - sold, 0)}
+                    свободно {available}
                   </p>
                 )}
                 </>

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -20,6 +21,11 @@ class Event(Base):
     venue_id: Mapped[int | None] = mapped_column(
         ForeignKey("venues.id", ondelete="SET NULL"), index=True, nullable=True
     )
+    # A native array rather than a joined table or a comma-separated string: the
+    # only query needed is "has any of these tags", which Postgres answers with
+    # the && operator straight off the column. Rows written before this column
+    # existed hold NULL, which the schema normalises to an empty list.
+    tags: Mapped[list[str] | None] = mapped_column(ARRAY(String(32)), nullable=True)
 
     # Per-event ticket card theming, rendered by the frontend TicketCard.
     card_bg: Mapped[str] = mapped_column(String(32), default="#fdfdf5", nullable=False)

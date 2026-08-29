@@ -8,6 +8,10 @@ export const DEFAULTS = {
   date: 'all',
   status: 'all',
   sort: 'date-asc',
+  // Empty means "any tag". Filtering happens in the browser alongside the other
+  // filters rather than through the API's ?tags= parameter, so switching a tag
+  // does not refetch the listing or clear the other filters mid-typing.
+  tags: [],
 }
 
 export const DATE_OPTIONS = [
@@ -60,6 +64,14 @@ export function fillRatio(event) {
 export function isSoldOut(event) {
   const capacity = event?.capacity ?? 0
   return capacity > 0 && (event.tickets_sold ?? 0) >= capacity
+}
+
+/** An event matches when it carries at least one of the chosen tags. */
+export function matchesTags(event, tags) {
+  if (!tags || !tags.length) return true
+  const own = event.tags
+  if (!Array.isArray(own) || !own.length) return false
+  return tags.some((tag) => own.includes(tag))
 }
 
 export function matchesSearch(event, query) {
@@ -128,6 +140,7 @@ export function compareEvents(a, b, sort) {
 export function applyFilters(events, filters, now = Date.now()) {
   if (!Array.isArray(events)) return []
   return events
+    .filter((event) => matchesTags(event, filters.tags))
     .filter((event) => matchesSearch(event, filters.query))
     .filter((event) => matchesDate(event, filters.date, now))
     .filter((event) => matchesStatus(event, filters.status, now))
@@ -140,6 +153,7 @@ export function isFiltered(filters) {
     filters.query.trim() !== DEFAULTS.query ||
     filters.date !== DEFAULTS.date ||
     filters.status !== DEFAULTS.status ||
-    filters.sort !== DEFAULTS.sort
+    filters.sort !== DEFAULTS.sort ||
+    (filters.tags?.length ?? 0) > 0
   )
 }

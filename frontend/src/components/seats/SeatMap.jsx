@@ -31,6 +31,16 @@ export default function SeatMap({
   const rows = groupByRow(seats)
   const selectable = mode === 'select'
 
+  // Only the categories this hall actually contains. Listing VIP and balcony in
+  // a hall that has neither invites the reader to hunt for seats that are not
+  // there. Aisles are excluded because they are never drawn.
+  const present = new Set(seats.filter((s) => !s.is_aisle).map((s) => s.category))
+  // "Taken" and "selected" are states rather than categories, so they are shown
+  // when they can actually occur, not when a category exists.
+  if (seats.some((s) => s.is_taken)) present.add('taken')
+  if (selectable) present.add('selected')
+  const legend = LEGEND.filter((item) => present.has(item.key))
+
   if (!rows.length) {
     return (
       <p className="py-8 text-center text-sm text-[var(--muted)]">
@@ -115,8 +125,9 @@ export default function SeatMap({
         </div>
       </div>
 
+      {legend.length > 0 && (
       <div className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-2 border-t border-[var(--border)] pt-4">
-        {LEGEND.map((item) => (
+        {legend.map((item) => (
           <span key={item.key} className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
             <span
               className="h-3 w-3 rounded-[3px]"
@@ -126,6 +137,7 @@ export default function SeatMap({
           </span>
         ))}
       </div>
+      )}
     </div>
   )
 }

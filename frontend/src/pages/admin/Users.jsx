@@ -6,6 +6,7 @@ import { apiError } from '../../api/client'
 import { formatShortDate } from '../../utils/dates'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
+import Select from '../../components/ui/Select'
 import useAuth from '../../hooks/useAuth'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
@@ -104,21 +105,17 @@ export default function Users() {
                       {user.role === 'scanner' && (
                         <Camera size={14} style={{ color: ROLE_COLOR.scanner }} />
                       )}
-                      <select
+                      <Select
                         value={user.role}
                         disabled={isSelf || changeRole.isPending}
-                        onChange={(event) =>
-                          changeRole.mutate({ id: user.id, role: event.target.value })
-                        }
-                        style={{ color: ROLE_COLOR[user.role] ?? 'var(--text)' }}
-                        className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-2.5 py-1.5 text-xs outline-none transition-colors focus:border-[var(--accent)] disabled:opacity-45"
-                      >
-                        {ROLES.map((role) => (
-                          <option key={role} value={role} style={{ color: 'var(--text)' }}>
-                            {ROLE_LABELS[role] ?? role}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(role) => changeRole.mutate({ id: user.id, role })}
+                        aria-label={`Роль: ${user.username}`}
+                        className="!w-[150px] !px-2.5 !py-1.5 !text-xs"
+                        options={ROLES.map((role) => ({
+                          value: role,
+                          label: ROLE_LABELS[role] ?? role,
+                        }))}
+                      />
                     </span>
                   </Td>
                   <Td>

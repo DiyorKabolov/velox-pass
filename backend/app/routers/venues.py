@@ -3,7 +3,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import require_superadmin
+from app.core.deps import VenueScope, get_current_venue_admin, require_superadmin
 from app.models.hall import Hall
 from app.models.seat import Seat
 from app.models.session import Session
@@ -103,9 +103,17 @@ def seats_for_layout(hall: Hall) -> list[Seat]:
 
 
 @router.get("", response_model=list[VenueOut])
-async def list_venues(db: AsyncSession = Depends(get_db)):
-    """Public listing, with a hall count so the admin table needs one call."""
-    result = await db.execute(select(Venue).order_by(Venue.name))
+async def list_venues(
+    scope: VenueScope = Depends(get_current_venue_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Venues the caller manages, with a hall count so the admin table needs
+    one call. No longer public: it is only ever read by the admin screens, and
+    a venue_admin must not learn about venues that are not theirs."""
+    query = select(Venue).order_by(Venue.name)
+    if not scope.is_superadmin:
+        query = query.where(Venue.id.in_(scope.ids))
+    result = await db.execute(query)
     venues = list(result.scalars().all())
 
     counts = dict(
@@ -137,10 +145,15 @@ async def create_venue(
 
 
 @router.get("/{venue_id}", response_model=VenueOut)
-async def get_venue(venue_id: int, db: AsyncSession = Depends(get_db)):
+async def get_venue(
+    venue_id: int,
+    scope: VenueScope = Depends(get_current_venue_admin),
+    db: AsyncSession = Depends(get_db),
+):
     venue = await db.get(Venue, venue_id)
     if not venue:
         raise HTTPException(status_code=404, detail="Площадка не найдена")
+    scope.require(venue_id)
     item = VenueOut.model_validate(venue)
     item.halls_count = await db.scalar(
         select(func.count(Hall.id)).where(Hall.venue_id == venue_id)
@@ -152,12 +165,13 @@ async def get_venue(venue_id: int, db: AsyncSession = Depends(get_db)):
 async def update_venue(
     venue_id: int,
     data: VenueUpdate,
-    _=Depends(require_superadmin),
+    scope: VenueScope = Depends(get_current_venue_admin),
     db: AsyncSession = Depends(get_db),
 ):
     venue = await db.get(Venue, venue_id)
     if not venue:
         raise HTTPException(status_code=404, detail="Площадка не найдена")
+    scope.require(venue_id)
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(venue, field, value)
     await db.flush()
@@ -178,7 +192,12 @@ async def delete_venue(
 
 
 @router.get("/{venue_id}/halls", response_model=list[HallOut])
-async def list_halls(venue_id: int, db: AsyncSession = Depends(get_db)):
+async def list_halls(
+    venue_id: int,
+    scope: VenueScope = Depends(get_current_venue_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    scope.require(venue_id)
     result = await db.execute(
         select(Hall).where(Hall.venue_id == venue_id).order_by(Hall.name)
     )
@@ -196,12 +215,13 @@ async def list_halls(venue_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/halls", response_model=HallOut, status_code=201)
 async def create_hall(
     data: HallCreate,
-    _=Depends(require_superadmin),
+    scope: VenueScope = Depends(get_current_venue_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a hall and materialise its seats from layout_json."""
     if not await db.get(Venue, data.venue_id):
         raise HTTPException(status_code=404, detail="Площадка не найдена")
+    scope.require(data.venue_id)
 
     hall = Hall(**data.model_dump())
     # Keep rows/cols in step with the grid that was actually sent.
@@ -242,7 +262,7 @@ async def get_hall(hall_id: int, db: AsyncSession = Depends(get_db)):
 async def update_hall(
     hall_id: int,
     data: HallUpdate,
-    _=Depends(require_superadmin),
+    scope: VenueScope = Depends(get_current_venue_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a hall. A new layout replaces every seat, so it is refused once
@@ -250,6 +270,7 @@ async def update_hall(
     hall = await db.get(Hall, hall_id)
     if not hall:
         raise HTTPException(status_code=404, detail="Зал не найден")
+    scope.require(hall.venue_id)
 
     fields = data.model_dump(exclude_unset=True)
     relayout = "layout_json" in fields and fields["layout_json"] is not None
@@ -291,12 +312,13 @@ async def update_hall(
 @router.delete("/halls/{hall_id}", status_code=204)
 async def delete_hall(
     hall_id: int,
-    _=Depends(require_superadmin),
+    scope: VenueScope = Depends(get_current_venue_admin),
     db: AsyncSession = Depends(get_db),
 ):
     hall = await db.get(Hall, hall_id)
     if not hall:
         raise HTTPException(status_code=404, detail="Зал не найден")
+    scope.require(hall.venue_id)
     await db.delete(hall)
 
 

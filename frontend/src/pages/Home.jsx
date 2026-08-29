@@ -4,6 +4,8 @@ import { RotateCcw, Search } from 'lucide-react'
 import { useEvents } from '../hooks/useEvents'
 import useDebouncedValue from '../hooks/useDebouncedValue'
 import EventCard from '../components/events/EventCard'
+import Select from '../components/ui/Select'
+import { EVENT_TAGS, tagColor } from '../utils/eventTags'
 import {
   applyFilters,
   DATE_OPTIONS,
@@ -52,26 +54,40 @@ export default function Home() {
   const [date, setDate] = useState(DEFAULTS.date)
   const [status, setStatus] = useState(DEFAULTS.status)
   const [sort, setSort] = useState(DEFAULTS.sort)
+  const [tags, setTags] = useState(DEFAULTS.tags)
+
+  const toggleTag = (tag) =>
+    setTags((current) =>
+      current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag],
+    )
 
   // The box updates instantly; the list waits for a pause in the typing.
   const settledQuery = useDebouncedValue(query, 300)
 
-  const filters = { query: settledQuery, date, status, sort }
+  const filters = { query: settledQuery, date, status, sort, tags }
   const filtered = useMemo(
     () => applyFilters(events, filters),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [events, settledQuery, date, status, sort],
+    [events, settledQuery, date, status, sort, tags],
   )
+
+  // Only tags something in the catalogue actually carries: offering a tag that
+  // can only ever return nothing is a dead end.
+  const availableTags = useMemo(() => {
+    const used = new Set((events ?? []).flatMap((event) => event.tags ?? []))
+    return EVENT_TAGS.filter((tag) => used.has(tag))
+  }, [events])
 
   // Reads the box, not the debounced copy, so the reset link appears as soon as
   // a character is typed rather than 300ms later.
-  const dirty = isFiltered({ query, date, status, sort })
+  const dirty = isFiltered({ query, date, status, sort, tags })
 
   const reset = () => {
     setQuery(DEFAULTS.query)
     setDate(DEFAULTS.date)
     setStatus(DEFAULTS.status)
     setSort(DEFAULTS.sort)
+    setTags(DEFAULTS.tags)
   }
 
   const ready = !isLoading && !isError
@@ -120,26 +136,19 @@ export default function Home() {
             onChange={setStatus}
           />
 
-          <select
+          <Select
             value={sort}
-            onChange={(event) => setSort(event.target.value)}
+            onChange={setSort}
             aria-label="Сортировка"
-            // colorScheme makes the browser paint the popup list dark too; the
-            // option rows themselves are drawn by the OS, not by this stylesheet.
-            style={{ colorScheme: 'dark' }}
-            className="shrink-0 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3 py-2.5 text-xs text-[var(--text)] outline-none transition-all duration-150 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            className="!w-auto min-w-[210px] !py-2 !text-xs"
+            options={SORT_OPTIONS}
+          />
 
           {dirty && (
             <button
               type="button"
               onClick={reset}
+              data-reset
               className="flex shrink-0 items-center gap-1.5 rounded-[var(--radius-sm)] px-2.5 py-2 text-xs text-[var(--muted)] transition-colors duration-150 hover:text-[var(--text)] active:scale-[0.95]"
             >
               <RotateCcw size={13} />
@@ -149,12 +158,44 @@ export default function Home() {
         </div>
       )}
 
+      {ready && hasEvents && availableTags.length > 0 && (
+        <div className="mb-10 flex flex-wrap items-center gap-2">
+          {availableTags.map((tag) => {
+            const on = tags.includes(tag)
+            return (
+              <button
+                key={tag}
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggleTag(tag)}
+                className={[
+                  'rounded-full border px-3 py-1.5 text-xs transition-all duration-150',
+                  'active:scale-[0.95]',
+                  on ? 'font-medium' : 'text-[var(--muted)] hover:text-[var(--text)]',
+                ].join(' ')}
+                style={
+                  on
+                    ? {
+                        borderColor: tagColor(tag),
+                        background: `${tagColor(tag)}22`,
+                        color: tagColor(tag),
+                      }
+                    : { borderColor: 'var(--border)' }
+                }
+              >
+                {tag}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {isLoading && (
         <div className="flex flex-wrap justify-center gap-6">
           {Array.from({ length: 6 }).map((_, index) => (
             <div
               key={index}
-              className="h-[218px] w-[290px] animate-pulse rounded-[var(--radius)] bg-[var(--surface)]"
+              className="h-[258px] w-full max-w-[320px] animate-pulse rounded-[var(--radius)] bg-[var(--surface)]"
             />
           ))}
         </div>

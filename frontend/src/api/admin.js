@@ -28,3 +28,22 @@ export async function getAllTickets() {
   const { data } = await client.get('/admin/tickets')
   return data
 }
+
+// --- venue staff ---------------------------------------------------------
+
+export async function getVenueStaff(venueId) {
+  const { data } = await client.get(`/admin/venues/${venueId}/staff`)
+  return data
+}
+
+export async function assignVenueStaff(venueId, { user_id, role }) {
+  const { data } = await client.post(`/admin/venues/${venueId}/assign`, {
+    user_id,
+    role,
+  })
+  return data
+}
+
+export async function removeVenueStaff(venueId, userId) {
+  await client.delete(`/admin/venues/${venueId}/staff/${userId}`)
+}

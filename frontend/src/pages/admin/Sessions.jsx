@@ -6,6 +6,7 @@ import { getAdminEvents } from '../../api/admin'
 import { getEventSessions } from '../../api/events'
 import { createSession, deleteSession } from '../../api/sessions'
 import { getVenueHalls, getVenues } from '../../api/venues'
+import Select from '../../components/ui/Select'
 import { apiError } from '../../api/client'
 import { formatDateTime, fromDatetimeLocal } from '../../utils/dates'
 import Button from '../../components/ui/Button'
@@ -189,18 +190,16 @@ export default function Sessions() {
               <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
                 Событие
               </span>
-              <select
+              <Select
                 value={form.eventId}
-                onChange={(e) => setForm({ ...form, eventId: e.target.value })}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)]"
-              >
-                <option value="">— выберите —</option>
-                {events?.map((event) => (
-                  <option key={event.id} value={event.id}>
-                    {event.title}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setForm({ ...form, eventId: value })}
+                placeholder="— выберите —"
+                aria-label="Событие"
+                options={(events ?? []).map((event) => ({
+                  value: String(event.id),
+                  label: event.title,
+                }))}
+              />
             </label>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -208,37 +207,33 @@ export default function Sessions() {
                 <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
                   Площадка
                 </span>
-                <select
+                <Select
                   value={form.venueId}
-                  onChange={(e) => setForm({ ...form, venueId: e.target.value, hallId: '' })}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)]"
-                >
-                  <option value="">— выберите —</option>
-                  {venues?.map((venue) => (
-                    <option key={venue.id} value={venue.id}>
-                      {venue.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setForm({ ...form, venueId: value, hallId: '' })}
+                  placeholder="— выберите —"
+                  aria-label="Площадка"
+                  options={(venues ?? []).map((venue) => ({
+                    value: String(venue.id),
+                    label: venue.name,
+                  }))}
+                />
               </label>
 
               <label className="block">
                 <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
                   Зал
                 </span>
-                <select
+                <Select
                   value={form.hallId}
                   disabled={!form.venueId}
-                  onChange={(e) => setForm({ ...form, hallId: e.target.value })}
-                  className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)] disabled:opacity-45"
-                >
-                  <option value="">— выберите —</option>
-                  {halls?.map((hall) => (
-                    <option key={hall.id} value={hall.id}>
-                      {hall.name} ({hall.seats_count})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => setForm({ ...form, hallId: value })}
+                  placeholder="— выберите —"
+                  aria-label="Зал"
+                  options={(halls ?? []).map((hall) => ({
+                    value: String(hall.id),
+                    label: `${hall.name} (${hall.seats_count})`,
+                  }))}
+                />
               </label>
             </div>
 
