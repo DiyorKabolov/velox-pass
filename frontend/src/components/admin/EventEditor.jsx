@@ -1,4 +1,9 @@
+import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import Input from '../ui/Input'
+import Select from '../ui/Select'
+import { getPreviewImage, getTemplates } from '../../api/pdfTemplates'
 import { EVENT_TAGS, tagColor } from '../../utils/eventTags'
 import ColorField from './ColorField'
 import EventPreview from './EventPreview'
@@ -8,6 +13,44 @@ import { COLOR_PRESETS, DEFAULT_COLORS } from './eventForm'
  * The whole event form, shared by the edit modal and the create page so the
  * two can never drift apart. Fully controlled: state lives in the parent.
  */
+/** Small render of the chosen template, so the pick can be recognised. */
+function TemplateThumb({ templateId }) {
+  const [url, setUrl] = useState(null)
+
+  useEffect(() => {
+    if (!templateId) {
+      setUrl(null)
+      return undefined
+    }
+    let objectUrl = null
+    let cancelled = false
+    getPreviewImage(templateId)
+      .then((value) => {
+        if (cancelled) {
+          URL.revokeObjectURL(value)
+          return
+        }
+        objectUrl = value
+        setUrl(value)
+      })
+      .catch(() => setUrl(null))
+    // The blob URL is ours to release; without this every reopen leaks one.
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [templateId])
+
+  if (!templateId || !url) return null
+  return (
+    <img
+      src={url}
+      alt=""
+      className="mt-3 h-28 w-auto rounded border border-[var(--border)] bg-white object-contain"
+    />
+  )
+}
+
 export default function EventEditor({ form, onChange }) {
   const set = (patch) => onChange({ ...form, ...patch })
   const field = (name) => (event) => set({ [name]: event.target.value })
@@ -176,7 +219,54 @@ export default function EventEditor({ form, onChange }) {
         </div>
       </div>
 
-      <EventPreview form={form} />
+      <div className="min-w-0">
+        <div className="mb-6">
+          <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+            PDF шаблон
+          </span>
+          <TemplatePicker
+            value={form.template_id}
+            onChange={(template_id) => set({ template_id })}
+          />
+        </div>
+
+        <EventPreview form={form} />
+      </div>
     </div>
+  )
+}
+
+/** Template chooser. "По умолчанию" is a real choice, not an absent one: it
+    means follow whichever template is flagged default, now and later. */
+function TemplatePicker({ value, onChange }) {
+  const { data: templates } = useQuery({
+    queryKey: ['admin', 'pdf-templates'],
+    queryFn: getTemplates,
+  })
+
+  const options = [
+    { value: '', label: 'По умолчанию' },
+    ...(templates ?? []).map((template) => ({
+      value: String(template.id),
+      label: template.is_default ? `${template.name} (основной)` : template.name,
+    })),
+  ]
+
+  return (
+    <>
+      <Select
+        value={value == null ? '' : String(value)}
+        onChange={(next) => onChange(next === '' ? null : Number(next))}
+        options={options}
+        aria-label="PDF шаблон"
+      />
+      <TemplateThumb templateId={value} />
+      <Link
+        to="/admin/pdf-templates"
+        className="mt-2 inline-block text-xs text-[var(--muted)] transition-colors hover:text-[var(--accent)]"
+      >
+        Управление шаблонами →
+      </Link>
+    </>
   )
 }

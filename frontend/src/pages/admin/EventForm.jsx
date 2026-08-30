@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { createEvent } from '../../api/events'
+import { setEventTemplate } from '../../api/pdfTemplates'
 import { apiError } from '../../api/client'
 import Button from '../../components/ui/Button'
 import EventEditor from '../../components/admin/EventEditor'
@@ -28,7 +29,12 @@ export default function EventForm() {
   const [form, setForm] = useState({ ...EMPTY_EVENT })
 
   const create = useMutation({
-    mutationFn: createEvent,
+    mutationFn: async (payload) => {
+      const event = await createEvent(payload)
+      // Only possible after the event exists, since the choice is keyed by id.
+      if (form.template_id) await setEventTemplate(event.id, form.template_id)
+      return event
+    },
     onSuccess: (event) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'events'] })
       queryClient.invalidateQueries({ queryKey: ['events'] })

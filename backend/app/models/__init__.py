@@ -2,6 +2,7 @@
 from app.core.database import Base
 from app.models.event import Event
 from app.models.hall import Hall
+from app.models.pdf_template import PdfTemplate
 from app.models.seat import Seat
 from app.models.seat_price import SeatPrice
 from app.models.session import Session
@@ -14,6 +15,7 @@ __all__ = [
     "Base",
     "Event",
     "Hall",
+    "PdfTemplate",
     "Seat",
     "SeatPrice",
     "Session",

@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +8,7 @@ from app.core.deps import get_current_user
 from app.core.websocket_manager import manager
 from app.models.user import User
 from app.schemas.ticket import TicketCreate, TicketOut
+from app.routers.pdf_templates import _abs_path as pdf_template_path
 from app.services import ticket_service
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
@@ -88,7 +90,19 @@ async def ticket_pdf(
     db: AsyncSession = Depends(get_db),
 ):
     ticket = await _owned_ticket(db, ticket_id, user)
-    pdf_bytes = ticket_service.build_ticket_pdf(ticket, user.username)
+
+    # An uploaded template wins over the built-in card; a template whose file
+    # has gone missing falls back rather than failing the download.
+    template = await ticket_service.resolve_template(db, ticket.event)
+    pdf_bytes = None
+    if template:
+        path = pdf_template_path(template)
+        if os.path.isfile(path):
+            pdf_bytes = ticket_service.build_templated_pdf(
+                ticket, user.username, path, template.layout_json
+            )
+    if pdf_bytes is None:
+        pdf_bytes = ticket_service.build_ticket_pdf(ticket, user.username)
     filename = f"velox-pass-{ticket.ticket_id}.pdf"
     return Response(
         content=pdf_bytes,

@@ -11,6 +11,9 @@ qrcode[pil]
 pillow
 reportlab
 PyPDF2
+# Renders a template PDF to PNG for the layout editor. Chosen over pdf2image,
+# which is only a wrapper around the poppler binaries and needs them on PATH.
+PyMuPDF
 python-dotenv
 psycopg2-binary
 emails

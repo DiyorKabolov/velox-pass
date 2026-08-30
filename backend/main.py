@@ -12,7 +12,16 @@ import uvicorn
 
 from app.core.config import settings
 from app.core.websocket_manager import manager
-from app.routers import admin, auth, events, scanner, sessions, tickets, venues
+from app.routers import (
+    admin,
+    auth,
+    events,
+    pdf_templates,
+    scanner,
+    sessions,
+    tickets,
+    venues,
+)
 
 # The Windows console defaults to a legacy code page that cannot encode the
 # emoji in the startup banner, which would crash the process on the first print.
@@ -44,6 +53,8 @@ app.include_router(venues.router, prefix=API_PREFIX)
 app.include_router(sessions.router, prefix=API_PREFIX)
 app.include_router(scanner.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
+app.include_router(pdf_templates.router, prefix=API_PREFIX)
+app.include_router(pdf_templates.event_router, prefix=API_PREFIX)
 
 
 @app.get("/api/status", tags=["system"])
@@ -80,8 +91,14 @@ FRONTEND_DIST = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 )
 
+# Uploaded template PDFs. Created before the mount, which fails on a missing
+# directory and would take the whole app down with it.
+UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(os.path.join(UPLOADS_DIR, "templates"), exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
 # Paths owned by FastAPI; the SPA fallback must never answer for them.
-RESERVED_PREFIXES = ("api", "docs", "redoc", "openapi.json", "health")
+RESERVED_PREFIXES = ("api", "docs", "redoc", "openapi.json", "health", "uploads")
 
 if os.path.isdir(FRONTEND_DIST):
     app.mount(

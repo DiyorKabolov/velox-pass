@@ -7,6 +7,7 @@ const TABS = [
   { to: '/admin/sessions', label: 'Сеансы' },
   { to: '/admin/users', label: 'Пользователи' },
   { to: '/admin/tickets', label: 'Билеты' },
+  { to: '/admin/pdf-templates', label: 'Шаблоны PDF' },
 ]
 
 function tabClass({ isActive }) {

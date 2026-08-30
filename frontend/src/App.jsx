@@ -16,6 +16,7 @@ import AdminEventForm from './pages/admin/EventForm'
 import AdminVenues from './pages/admin/Venues'
 import AdminSessions from './pages/admin/Sessions'
 import AdminTickets from './pages/admin/Tickets'
+import AdminPdfTemplates from './pages/admin/PdfTemplates'
 import AdminUsers from './pages/admin/Users'
 
 /** Requires a signed-in user; remembers where they were headed. */
@@ -165,6 +166,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminTickets />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/pdf-templates"
+            element={
+              <AdminRoute>
+                <AdminPdfTemplates />
               </AdminRoute>
             }
           />

@@ -15,17 +15,30 @@ import sys
 from sqlalchemy import create_engine, inspect, text
 
 from app.core.config import settings
+# Imported for the side effect of registering every table on Base.
+from app.models import Base
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # (table, column, DDL executed when the column is missing)
-MIGRATIONS = [
+COLUMNS = [
     (
         "events",
         "tags",
         "ALTER TABLE events ADD COLUMN tags VARCHAR(32)[]",
     ),
+    (
+        "events",
+        "template_id",
+        "ALTER TABLE events ADD COLUMN template_id INTEGER "
+        "REFERENCES pdf_templates(id) ON DELETE SET NULL",
+    ),
 ]
+
+# Whole tables added after the first build. create_all would make these, but it
+# is only run by create_db.py; listing them here means one command brings an
+# existing database fully up to date.
+TABLES = ["pdf_templates"]
 
 
 def main() -> int:
@@ -33,12 +46,29 @@ def main() -> int:
     applied = 0
 
     try:
+        existing = set(inspect(engine).get_table_names())
+
+        # Tables first: a column below carries a foreign key into one of them,
+        # and Postgres refuses the reference if the target is not there yet.
+        missing = [name for name in TABLES if name not in existing]
+        if missing:
+            Base.metadata.create_all(
+                engine, tables=[Base.metadata.tables[name] for name in missing]
+            )
+            for name in missing:
+                print(f"  + таблица {name}: создана")
+                applied += 1
+        else:
+            for name in TABLES:
+                print(f"  - таблица {name}: уже есть")
+
+        # Re-read: the table just created has to be visible to the column check.
         inspector = inspect(engine)
-        existing_tables = set(inspector.get_table_names())
+        existing = set(inspector.get_table_names())
 
         with engine.begin() as connection:
-            for table, column, ddl in MIGRATIONS:
-                if table not in existing_tables:
+            for table, column, ddl in COLUMNS:
+                if table not in existing:
                     print(f"  - {table}.{column}: таблицы нет, пропуск "
                           f"(создастся через create_db.py)")
                     continue
@@ -58,7 +88,8 @@ def main() -> int:
     finally:
         engine.dispose()
 
-    print(f"\nГотово. Изменений: {applied}." if applied else "\nГотово. Изменений нет.")
+    print()
+    print(f"Готово. Изменений: {applied}." if applied else "Готово. Изменений нет.")
     return 0
 
 

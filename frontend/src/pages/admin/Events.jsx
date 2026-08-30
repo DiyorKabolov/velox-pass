@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { getAdminEvents } from '../../api/admin'
 import { deleteEvent, updateEvent } from '../../api/events'
+import { setEventTemplate } from '../../api/pdfTemplates'
 import { apiError } from '../../api/client'
 import { formatShortDate } from '../../utils/dates'
 import Button from '../../components/ui/Button'
@@ -31,7 +32,12 @@ export default function Events() {
   }
 
   const save = useMutation({
-    mutationFn: ({ id, payload }) => updateEvent(id, payload),
+    mutationFn: async ({ id, payload, templateId }) => {
+      const event = await updateEvent(id, payload)
+      // Its own endpoint, per the API: the event schemas do not carry it.
+      await setEventTemplate(id, templateId ?? null)
+      return event
+    },
     onSuccess: () => {
       invalidate()
       setEditing(null)
@@ -55,7 +61,11 @@ export default function Events() {
       toast.error(problem)
       return
     }
-    save.mutate({ id: editing.id, payload: toPayload(editing.form) })
+    save.mutate({
+      id: editing.id,
+      payload: toPayload(editing.form),
+      templateId: editing.form.template_id,
+    })
   }
 
   const handleDelete = (event) => {

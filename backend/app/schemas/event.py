@@ -65,6 +65,7 @@ class EventOut(BaseModel):
     created_at: datetime
 
     tags: list[str] = []
+    template_id: int | None = None
 
     # Computed by the events router so the UI can draw a capacity bar.
     tickets_sold: int = 0

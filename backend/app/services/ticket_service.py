@@ -15,11 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.event import Event
+from app.models.pdf_template import PdfTemplate
 from app.models.seat import Seat
 from app.models.seat_price import SeatPrice
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.schemas.ticket import TicketOut
+from app.services import pdf_render
 
 
 def new_ticket_id() -> str:
@@ -197,6 +199,59 @@ async def scan_ticket(
     ticket.used_at = datetime.now(timezone.utc)
     await db.flush()
     return "ok", "Проходите, билет действителен", ticket
+
+
+async def resolve_template(db: AsyncSession, event: Event | None) -> PdfTemplate | None:
+    """The template a ticket for this event should be stamped onto.
+
+    The event's own choice wins; otherwise whichever template is marked default;
+    otherwise None, and the caller falls back to the built-in A6 card. Resolving
+    the default here rather than copying it onto the event means changing the
+    default reaches every event that never picked one.
+    """
+    if event is None:
+        return None
+    if event.template_id:
+        template = await db.get(PdfTemplate, event.template_id)
+        if template:
+            return template
+    return await db.scalar(
+        select(PdfTemplate).where(PdfTemplate.is_default.is_(True)).limit(1)
+    )
+
+
+def template_values(ticket: Ticket, username: str) -> dict[str, str]:
+    """The text each placeable field resolves to for one ticket."""
+    event = ticket.event
+    seat = ticket.seat
+    if seat:
+        label = seat.label or f"R{seat.row} S{seat.col}"
+        seat_text = f"Ряд {seat.row} · {label}"
+    else:
+        seat_text = "—"
+    return {
+        "event_title": (event.title if event else "") or "",
+        "date": event.date.strftime("%d.%m.%Y %H:%M") if event and event.date else "",
+        "location": (event.location if event else "") or "",
+        "buyer_name": username or "",
+        "seat": seat_text,
+        "ticket_id": ticket.ticket_id,
+    }
+
+
+def build_templated_pdf(ticket: Ticket, username: str, template_path: str,
+                        layout_json: str | None) -> bytes:
+    """Stamp the ticket onto an uploaded template."""
+    width, height = pdf_render.page_size(template_path)
+    layout = pdf_render.parse_layout(layout_json)
+    overlay = pdf_render.render_overlay(
+        layout,
+        template_values(ticket, username),
+        build_qr_png(ticket.ticket_id, box_size=10),
+        width,
+        height,
+    )
+    return pdf_render.compose(template_path, overlay)
 
 
 def build_ticket_pdf(ticket: Ticket, username: str) -> bytes:
