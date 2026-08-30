@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Camera, Trash2 } from 'lucide-react'
+import { AlertTriangle, Camera, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { deleteUser, getUsers, updateUserRole } from '../../api/admin'
 import { apiError } from '../../api/client'
@@ -7,6 +7,7 @@ import { formatShortDate } from '../../utils/dates'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
+import { ROLE_LABELS as VENUE_ROLE_LABELS, ROLE_STYLE } from '../../components/admin/VenueStaff'
 import useAuth from '../../hooks/useAuth'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
@@ -24,6 +25,46 @@ const ROLE_COLOR = {
   scanner: 'var(--warn)',
   venue_admin: 'var(--accent)',
   superadmin: 'var(--ok)',
+}
+
+/**
+ * Venues an account is attached to. Read-only here -- assignments are made on
+ * the Venues page -- but a scoped role with no venue can do nothing at all, so
+ * that state is called out rather than left blank.
+ */
+function VenueCell({ user }) {
+  const scoped = user.role === 'venue_admin' || user.role === 'scanner'
+  if (!scoped) return <span className="text-[var(--muted2)]">—</span>
+
+  const venues = user.venues ?? []
+  if (!venues.length) {
+    return (
+      <span
+        title="Роль есть, но ни одна площадка не назначена — доступа не будет"
+        className="flex items-center gap-1.5 whitespace-nowrap text-xs text-[var(--warn)]"
+      >
+        <AlertTriangle size={13} className="shrink-0" />
+        Не привязан
+      </span>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {venues.map((venue) => (
+        <span
+          key={venue.venue_id}
+          // Tinted by the venue role, so admin and scanner are told apart
+          // without opening the venue.
+          style={ROLE_STYLE[venue.role]}
+          title={`${venue.venue_name}: ${VENUE_ROLE_LABELS[venue.role] ?? venue.role}`}
+          className="whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px]"
+        >
+          {venue.venue_name}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 export default function Users() {
@@ -75,6 +116,7 @@ export default function Users() {
               <Th>Статус</Th>
               <Th>Регистрация</Th>
               <Th>Роль</Th>
+              <Th>Площадки</Th>
               <Th className="text-right">Действия</Th>
             </tr>
           </thead>
@@ -117,6 +159,9 @@ export default function Users() {
                         }))}
                       />
                     </span>
+                  </Td>
+                  <Td>
+                    <VenueCell user={user} />
                   </Td>
                   <Td>
                     <div className="flex justify-end">

@@ -29,6 +29,14 @@
   --radius-sm: 8px;
 }
 
+html {
+  /* Always reserve the scrollbar's gutter. Admin tabs differ in height, so on
+     some the page scrolls and on others it does not; letting the bar appear and
+     vanish changes the viewport width by its own thickness, and every centred
+     layout jumps sideways by that much on each switch. */
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--bg);
   color: var(--text);

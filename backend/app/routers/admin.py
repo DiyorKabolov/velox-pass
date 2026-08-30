@@ -15,8 +15,10 @@ from app.models.user import User
 from app.schemas.event import EventCreate, EventOut, EventUpdate
 from app.schemas.ticket import TicketOut
 from app.schemas.user import (
+    UserAdminOut,
     UserOut,
     UserRoleUpdate,
+    UserVenueBrief,
     VenueStaffAssign,
     VenueStaffOut,
 )
@@ -100,10 +102,36 @@ async def admin_scanners(db: AsyncSession = Depends(get_db)):
     return list(result.scalars().all())
 
 
-@router.get("/users", response_model=list[UserOut])
+@router.get("/users", response_model=list[UserAdminOut])
 async def admin_users(db: AsyncSession = Depends(get_db)):
+    """Users with the venues each is attached to.
+
+    The grants come from one grouped query rather than a request per venue from
+    the browser, so the column costs nothing as the venue list grows.
+    """
     result = await db.execute(select(User).order_by(User.created_at.desc()))
-    return list(result.scalars().all())
+    users = list(result.scalars().all())
+
+    grants = (
+        await db.execute(
+            select(UserVenueRole.user_id, UserVenueRole.role, Venue.id, Venue.name)
+            .join(Venue, Venue.id == UserVenueRole.venue_id)
+            .order_by(Venue.name)
+        )
+    ).all()
+
+    by_user: dict[int, list[UserVenueBrief]] = {}
+    for user_id, role, venue_id, venue_name in grants:
+        by_user.setdefault(user_id, []).append(
+            UserVenueBrief(venue_id=venue_id, venue_name=venue_name, role=role)
+        )
+
+    payload = []
+    for user in users:
+        item = UserAdminOut.model_validate(user)
+        item.venues = by_user.get(user.id, [])
+        payload.append(item)
+    return payload
 
 
 @router.patch("/users/{user_id}/role", response_model=UserOut)
@@ -161,24 +189,38 @@ async def _require_venue(db: AsyncSession, venue_id: int) -> Venue:
 async def venue_staff(venue_id: int, db: AsyncSession = Depends(get_db)):
     await _require_venue(db, venue_id)
     result = await db.execute(
-        select(UserVenueRole, User)
+        select(
+            UserVenueRole.user_id,
+            UserVenueRole.role,
+            UserVenueRole.created_at,
+            User.username,
+            User.email,
+            User.role.label("global_role"),
+        )
         .join(User, User.id == UserVenueRole.user_id)
         .where(UserVenueRole.venue_id == venue_id)
         .order_by(User.username)
     )
     return [
         VenueStaffOut(
-            user_id=user.id,
-            username=user.username,
-            email=user.email,
-            role=grant.role,
-            global_role=user.role,
+            user_id=user_id,
+            username=username,
+            email=email,
+            role=role,
+            assigned_at=created_at,
+            global_role=global_role,
         )
-        for grant, user in result.all()
+        for user_id, role, created_at, username, email, global_role in result.all()
     ]
 
 
-@router.post("/venues/{venue_id}/assign", response_model=VenueStaffOut, status_code=201)
+@router.post("/venues/{venue_id}/staff", response_model=VenueStaffOut, status_code=201)
+@router.post(
+    "/venues/{venue_id}/assign",
+    response_model=VenueStaffOut,
+    status_code=201,
+    include_in_schema=False,  # kept only so an older caller does not break
+)
 async def assign_venue_staff(
     venue_id: int,
     data: VenueStaffAssign,
@@ -221,6 +263,7 @@ async def assign_venue_staff(
         username=user.username,
         email=user.email,
         role=grant.role,
+        assigned_at=grant.created_at,
         global_role=user.role,
     )
 

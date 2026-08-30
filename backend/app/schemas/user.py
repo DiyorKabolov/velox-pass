@@ -32,6 +32,21 @@ class UserRoleUpdate(BaseModel):
     role: str
 
 
+class UserVenueBrief(BaseModel):
+    """One venue a user is attached to, for the admin user table."""
+
+    venue_id: int
+    venue_name: str
+    role: str
+
+
+class UserAdminOut(UserOut):
+    """UserOut plus the venue grants. Separate from UserOut so the auth
+    responses, which have no reason to carry them, stay as they were."""
+
+    venues: list[UserVenueBrief] = []
+
+
 class VenueStaffAssign(BaseModel):
     """Grant one user a venue-scoped role."""
 
@@ -45,6 +60,10 @@ class VenueStaffOut(BaseModel):
     email: EmailStr
     # The grant on this venue.
     role: str
+    # None for grants made before the column existed.
+    assigned_at: datetime | None = None
+    # Filled only where several venues are listed together.
+    venue_name: str | None = None
     # The account-wide role, which the navbar and route guards read. Shown so an
     # admin can see when the two disagree.
     global_role: str

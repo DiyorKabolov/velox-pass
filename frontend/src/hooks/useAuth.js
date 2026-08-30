@@ -19,6 +19,9 @@ export function useAuth() {
       logout,
       isAuthenticated: Boolean(token && user),
       isSuperadmin: user?.role === 'superadmin',
+      // The panel is for venue administrators; a superadmin reaches the same
+      // screens through the full admin section and does not need the link.
+      isVenueAdmin: user?.role === 'venue_admin',
       isStaff: ['superadmin', 'venue_admin'].includes(user?.role),
       isScanner: ['superadmin', 'venue_admin', 'scanner'].includes(user?.role),
     }),

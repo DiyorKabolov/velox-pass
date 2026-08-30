@@ -45,3 +45,24 @@ export async function getHallSeats(hallId, sessionId) {
   })
   return data
 }
+
+// --- venue staff ---------------------------------------------------------
+// Served by the admin router, but they belong to a venue, so they live here
+// beside the rest of the venue calls.
+
+export async function getVenueStaff(venueId) {
+  const { data } = await client.get(`/admin/venues/${venueId}/staff`)
+  return data
+}
+
+export async function addVenueStaff(venueId, userId, role) {
+  const { data } = await client.post(`/admin/venues/${venueId}/staff`, {
+    user_id: userId,
+    role,
+  })
+  return data
+}
+
+export async function removeVenueStaff(venueId, userId) {
+  await client.delete(`/admin/venues/${venueId}/staff/${userId}`)
+}

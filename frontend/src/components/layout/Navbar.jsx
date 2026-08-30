@@ -1,4 +1,12 @@
-import { CalendarDays, Camera, LayoutDashboard, LogOut, Ticket, User } from 'lucide-react'
+import {
+  Building2,
+  CalendarDays,
+  Camera,
+  LayoutDashboard,
+  LogOut,
+  Ticket,
+  User,
+} from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
@@ -44,7 +52,8 @@ function NavItem({ to, end, icon: Icon, children }) {
 }
 
 export default function Navbar() {
-  const { isAuthenticated, isScanner, isSuperadmin, user, logout } = useAuth()
+  const { isAuthenticated, isScanner, isSuperadmin, isVenueAdmin, user, logout } =
+    useAuth()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -81,6 +90,12 @@ export default function Navbar() {
           {isScanner && (
             <NavItem to="/scanner" icon={Camera}>
               Сканер
+            </NavItem>
+          )}
+
+          {isVenueAdmin && (
+            <NavItem to="/venue-admin" icon={Building2}>
+              Моя площадка
             </NavItem>
           )}
 

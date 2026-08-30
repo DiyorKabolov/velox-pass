@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, Grid3x3, Plus, Trash2 } from 'lucide-react'
+import { Grid3x3, Plus, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { apiError } from '../../api/client'
 import {
@@ -29,48 +29,231 @@ const VENUE_TYPE_LABELS = {
   other: 'Другое',
 }
 
-function HallRows({ venueId, onDeleted }) {
+const EMPTY_VENUE = { name: '', type: 'theater', address: '' }
+const EMPTY_HALL = { name: '', rows: 5, cols: 8 }
+
+/** Pill tabs matching the admin strip above. */
+function Tab({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-selected={active}
+      role="tab"
+      className={[
+        'rounded-[var(--radius-sm)] px-3.5 py-1.5 text-sm transition-colors duration-150',
+        active
+          ? 'bg-[var(--accent)] font-medium text-[var(--bg)]'
+          : 'text-[var(--muted)] hover:text-[var(--text)]',
+      ].join(' ')}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Halls of one venue, with the creation form folded out underneath. */
+function HallsTab({ venueId }) {
+  const queryClient = useQueryClient()
+  const [form, setForm] = useState(null)
+
   const { data: halls, isLoading } = useQuery({
     queryKey: ['venues', venueId, 'halls'],
     queryFn: () => getVenueHalls(venueId),
   })
 
-  if (isLoading) {
-    return <p className="px-4 py-3 text-sm text-[var(--muted)]">Загрузка залов…</p>
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['venues', venueId, 'halls'] })
+    // halls_count on the venue row moves with it.
+    queryClient.invalidateQueries({ queryKey: ['venues'] })
   }
-  if (!halls?.length) {
-    return <p className="px-4 py-3 text-sm text-[var(--muted)]">Залов пока нет.</p>
+
+  const add = useMutation({
+    mutationFn: createHall,
+    onSuccess: (hall) => {
+      refresh()
+      setForm(null)
+      toast.success(`Зал создан, мест: ${hall.seats_count}`)
+    },
+    onError: (error) => toast.error(apiError(error, 'Не удалось создать зал')),
+  })
+
+  const remove = useMutation({
+    mutationFn: deleteHall,
+    onSuccess: () => {
+      refresh()
+      toast.success('Зал удалён')
+    },
+    onError: (error) => toast.error(apiError(error, 'Не удалось удалить зал')),
+  })
+
+  // Resizing keeps whatever was already painted, inside the new bounds.
+  const resize = (rows, cols) =>
+    setForm((current) => ({
+      ...current,
+      rows,
+      cols,
+      grid: makeGrid(rows, cols, current.grid),
+    }))
+
+  const submit = () => {
+    if (!form.name.trim()) {
+      toast.error('Укажите название зала')
+      return
+    }
+    add.mutate({
+      venue_id: venueId,
+      name: form.name.trim(),
+      rows: form.rows,
+      cols: form.cols,
+      layout_json: gridToLayout(form.grid),
+    })
   }
 
   return (
-    <ul className="divide-y divide-[var(--border)]">
-      {halls.map((hall) => (
-        <li key={hall.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
-          <span className="flex min-w-0 items-center gap-2 text-sm">
-            <Grid3x3 size={14} className="shrink-0 text-[var(--accent)]" />
-            <span className="truncate">{hall.name}</span>
-            <span className="font-mono2 text-xs text-[var(--muted2)]">
-              {hall.rows}×{hall.cols} · {hall.seats_count} мест
-            </span>
-          </span>
-          <Button
-            size="sm"
-            variant="danger"
-            aria-label={`Удалить ${hall.name}`}
-            onClick={() => {
-              if (window.confirm(`Удалить зал "${hall.name}"?`)) onDeleted(hall.id)
-            }}
-          >
-            <Trash2 size={13} />
-          </Button>
-        </li>
-      ))}
-    </ul>
+    <div>
+      {isLoading ? (
+        <p className="text-sm text-[var(--muted)]">Загрузка залов…</p>
+      ) : halls?.length ? (
+        <ul className="divide-y divide-[var(--border)] rounded-[var(--radius-sm)] border border-[var(--border)]">
+          {halls.map((hall) => (
+            <li
+              key={hall.id}
+              className="flex items-center justify-between gap-3 px-3 py-2.5"
+            >
+              <span className="flex min-w-0 items-center gap-2 text-sm">
+                <Grid3x3 size={14} className="shrink-0 text-[var(--accent)]" />
+                <span className="truncate">{hall.name}</span>
+                <span className="shrink-0 font-mono2 text-xs text-[var(--muted2)]">
+                  {hall.rows}×{hall.cols} · {hall.seats_count} мест
+                </span>
+              </span>
+              <Button
+                size="sm"
+                variant="danger"
+                aria-label={`Удалить ${hall.name}`}
+                loading={remove.isPending}
+                onClick={() => {
+                  if (window.confirm(`Удалить зал "${hall.name}"?`)) remove.mutate(hall.id)
+                }}
+              >
+                <Trash2 size={13} />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-[var(--muted)]">Залов пока нет.</p>
+      )}
+
+      {form ? (
+        <div className="mt-4 space-y-4 rounded-[var(--radius-sm)] border border-[var(--border)] p-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Input
+              label="Название зала"
+              name="hallName"
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+              placeholder="Большой зал"
+              required
+            />
+            <Input
+              label="Рядов"
+              name="rows"
+              type="number"
+              min={1}
+              max={40}
+              value={form.rows}
+              onChange={(event) =>
+                resize(Math.max(1, Math.min(40, Number(event.target.value) || 1)), form.cols)
+              }
+            />
+            <Input
+              label="Мест в ряду"
+              name="cols"
+              type="number"
+              min={1}
+              max={40}
+              value={form.cols}
+              onChange={(event) =>
+                resize(form.rows, Math.max(1, Math.min(40, Number(event.target.value) || 1)))
+              }
+            />
+          </div>
+
+          <p className="text-xs text-[var(--muted2)]">
+            Нарисуйте схему — места создадутся автоматически.
+          </p>
+          {/* The editor scrolls sideways on its own, so a wide hall does not
+              stretch the dialog. */}
+          <HallGridEditor grid={form.grid} onChange={(grid) => setForm({ ...form, grid })} />
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setForm(null)}>
+              Отмена
+            </Button>
+            <Button loading={add.isPending} onClick={submit}>
+              Создать зал
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          variant="ghost"
+          className="mt-4"
+          onClick={() =>
+            setForm({ ...EMPTY_HALL, grid: makeGrid(EMPTY_HALL.rows, EMPTY_HALL.cols) })
+          }
+        >
+          <Plus size={14} />
+          Добавить зал
+        </Button>
+      )}
+    </div>
   )
 }
 
-const EMPTY_VENUE = { name: '', type: 'theater', address: '' }
-const EMPTY_HALL = { name: '', rows: 5, cols: 8 }
+/** Halls and staff of one venue, behind two tabs. */
+function VenueModal({ venue, onClose }) {
+  const [tab, setTab] = useState('halls')
+
+  return (
+    <Modal
+      open={Boolean(venue)}
+      onClose={onClose}
+      size="md"
+      title={venue?.name ?? ''}
+      subtitle={
+        venue
+          ? [VENUE_TYPE_LABELS[venue.type] ?? venue.type, venue.address]
+              .filter(Boolean)
+              .join(' · ')
+          : undefined
+      }
+    >
+      {venue && (
+        <>
+          <div role="tablist" className="mb-5 flex gap-1">
+            <Tab active={tab === 'halls'} onClick={() => setTab('halls')}>
+              Залы
+            </Tab>
+            <Tab active={tab === 'staff'} onClick={() => setTab('staff')}>
+              Персонал
+            </Tab>
+          </div>
+
+          {/* Remounted per venue, so switching venues never shows the previous
+              one's halls while the new request is in flight. */}
+          {tab === 'halls' ? (
+            <HallsTab key={venue.id} venueId={venue.id} />
+          ) : (
+            <VenueStaff key={venue.id} venueId={venue.id} bare />
+          )}
+        </>
+      )}
+    </Modal>
+  )
+}
 
 export default function Venues() {
   const queryClient = useQueryClient()
@@ -80,14 +263,10 @@ export default function Venues() {
     queryFn: getVenues,
   })
 
-  const [expanded, setExpanded] = useState(null)
   const [venueForm, setVenueForm] = useState(null)
-  // { venueId, form, grid } while the hall dialog is open.
-  const [hallForm, setHallForm] = useState(null)
+  const [detail, setDetail] = useState(null)
 
   const refreshVenues = () => queryClient.invalidateQueries({ queryKey: ['venues'] })
-  const refreshHalls = (venueId) =>
-    queryClient.invalidateQueries({ queryKey: ['venues', venueId, 'halls'] })
 
   const addVenue = useMutation({
     mutationFn: createVenue,
@@ -101,67 +280,18 @@ export default function Venues() {
 
   const removeVenue = useMutation({
     mutationFn: deleteVenue,
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       refreshVenues()
+      if (detail?.id === id) setDetail(null)
       toast.success('Площадка удалена')
     },
     onError: (error) => toast.error(apiError(error, 'Не удалось удалить площадку')),
   })
 
-  const addHall = useMutation({
-    mutationFn: createHall,
-    onSuccess: (hall) => {
-      refreshHalls(hall.venue_id)
-      refreshVenues()
-      setHallForm(null)
-      toast.success(`Зал создан, мест: ${hall.seats_count}`)
-    },
-    onError: (error) => toast.error(apiError(error, 'Не удалось создать зал')),
-  })
-
-  const removeHall = useMutation({
-    mutationFn: deleteHall,
-    onSuccess: () => {
-      refreshHalls(expanded)
-      refreshVenues()
-      toast.success('Зал удалён')
-    },
-    onError: (error) => toast.error(apiError(error, 'Не удалось удалить зал')),
-  })
-
-  const openHallDialog = (venueId) =>
-    setHallForm({
-      venueId,
-      form: { ...EMPTY_HALL },
-      grid: makeGrid(EMPTY_HALL.rows, EMPTY_HALL.cols),
-    })
-
-  const resizeGrid = (rows, cols) =>
-    setHallForm((current) => ({
-      ...current,
-      form: { ...current.form, rows, cols },
-      // Keep whatever the person already painted inside the new bounds.
-      grid: makeGrid(rows, cols, current.grid),
-    }))
-
-  const submitHall = () => {
-    if (!hallForm.form.name.trim()) {
-      toast.error('Укажите название зала')
-      return
-    }
-    addHall.mutate({
-      venue_id: hallForm.venueId,
-      name: hallForm.form.name.trim(),
-      rows: hallForm.form.rows,
-      cols: hallForm.form.cols,
-      layout_json: gridToLayout(hallForm.grid),
-    })
-  }
-
   return (
     <AdminLayout
       title="Площадки"
-      subtitle="Площадки, залы и схемы рассадки."
+      subtitle="Нажмите на площадку, чтобы открыть залы и персонал."
       action={
         <Button onClick={() => setVenueForm({ ...EMPTY_VENUE })}>
           <Plus size={15} />
@@ -175,7 +305,6 @@ export default function Venues() {
         <TableShell>
           <thead>
             <tr>
-              <Th className="w-10" />
               <Th>Название</Th>
               <Th>Тип</Th>
               <Th>Адрес</Th>
@@ -184,61 +313,55 @@ export default function Venues() {
             </tr>
           </thead>
           <tbody>
-            {venues?.map((venue) => {
-              const isOpen = expanded === venue.id
-              return [
-                <tr key={venue.id} className="transition-colors hover:bg-[var(--surface)]">
-                  <Td>
-                    <button
-                      type="button"
-                      aria-label={isOpen ? 'Свернуть залы' : 'Показать залы'}
-                      onClick={() => setExpanded(isOpen ? null : venue.id)}
-                      className="rounded p-1 text-[var(--muted)] transition-colors hover:text-[var(--text)]"
+            {venues?.map((venue) => (
+              <tr
+                key={venue.id}
+                onClick={() => setDetail(venue)}
+                // Reachable without a mouse: the row is the only way in.
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setDetail(venue)
+                  }
+                }}
+                className="cursor-pointer transition-colors hover:bg-[var(--surface)] focus:bg-[var(--surface)] focus:outline-none"
+              >
+                <Td>{venue.name}</Td>
+                <Td className="text-[var(--muted)]">
+                  {VENUE_TYPE_LABELS[venue.type] ?? venue.type}
+                </Td>
+                <Td className="text-[var(--muted)]">{venue.address || '—'}</Td>
+                <Td className="text-right font-mono2 text-xs">{venue.halls_count}</Td>
+                <Td>
+                  {/* The buttons sit inside a clickable row, so their clicks
+                      must not also open the dialog. */}
+                  <div
+                    className="flex justify-end gap-1.5"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Button size="sm" variant="ghost" onClick={() => setDetail(venue)}>
+                      <Plus size={13} /> Зал
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      aria-label={`Удалить ${venue.name}`}
+                      onClick={() => {
+                        if (window.confirm(`Удалить "${venue.name}" со всеми залами?`)) {
+                          removeVenue.mutate(venue.id)
+                        }
+                      }}
                     >
-                      {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                    </button>
-                  </Td>
-                  <Td>{venue.name}</Td>
-                  <Td className="text-[var(--muted)]">
-                    {VENUE_TYPE_LABELS[venue.type] ?? venue.type}
-                  </Td>
-                  <Td className="text-[var(--muted)]">{venue.address || '—'}</Td>
-                  <Td className="text-right font-mono2 text-xs">{venue.halls_count}</Td>
-                  <Td>
-                    <div className="flex justify-end gap-1.5">
-                      <Button size="sm" variant="ghost" onClick={() => openHallDialog(venue.id)}>
-                        <Plus size={13} /> Зал
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        aria-label={`Удалить ${venue.name}`}
-                        onClick={() => {
-                          if (window.confirm(`Удалить "${venue.name}" со всеми залами?`)) {
-                            removeVenue.mutate(venue.id)
-                          }
-                        }}
-                      >
-                        <Trash2 size={13} />
-                      </Button>
-                    </div>
-                  </Td>
-                </tr>,
-                isOpen && (
-                  <tr key={`${venue.id}-halls`}>
-                    <Td colSpan={6} className="bg-[var(--bg)] p-0">
-                      <HallRows venueId={venue.id} onDeleted={(id) => removeHall.mutate(id)} />
-                      {/* Mounted only while the row is expanded, so the staff
-                          list is fetched for one venue at a time. */}
-                      <VenueStaff venueId={venue.id} />
-                    </Td>
-                  </tr>
-                ),
-              ]
-            })}
+                      <Trash2 size={13} />
+                    </Button>
+                  </div>
+                </Td>
+              </tr>
+            ))}
             {venues?.length === 0 && (
               <tr>
-                <Td className="text-center text-[var(--muted)]" colSpan={6}>
+                <Td className="text-center text-[var(--muted)]" colSpan={5}>
                   Площадок пока нет.
                 </Td>
               </tr>
@@ -247,9 +370,12 @@ export default function Venues() {
         </TableShell>
       )}
 
+      <VenueModal venue={detail} onClose={() => setDetail(null)} />
+
       <Modal
         open={Boolean(venueForm)}
         onClose={() => setVenueForm(null)}
+        size="md"
         title="Новая площадка"
         footer={
           <>
@@ -282,7 +408,7 @@ export default function Venues() {
               name="name"
               value={venueForm.name}
               onChange={(e) => setVenueForm({ ...venueForm, name: e.target.value })}
-              placeholder="Большой концертный зал"
+              placeholder="Большой театр"
               required
             />
             <label className="block">
@@ -305,76 +431,6 @@ export default function Venues() {
               value={venueForm.address}
               onChange={(e) => setVenueForm({ ...venueForm, address: e.target.value })}
               placeholder="ул. Главная, 1"
-            />
-          </div>
-        )}
-      </Modal>
-
-      <Modal
-        open={Boolean(hallForm)}
-        onClose={() => setHallForm(null)}
-        title="Новый зал"
-        subtitle="Нарисуйте схему — места создадутся автоматически"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setHallForm(null)}>
-              Отмена
-            </Button>
-            <Button loading={addHall.isPending} onClick={submitHall}>
-              Создать зал
-            </Button>
-          </>
-        }
-      >
-        {hallForm && (
-          <div className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Input
-                label="Название зала"
-                name="hallName"
-                value={hallForm.form.name}
-                onChange={(e) =>
-                  setHallForm({
-                    ...hallForm,
-                    form: { ...hallForm.form, name: e.target.value },
-                  })
-                }
-                placeholder="Большой зал"
-                required
-              />
-              <Input
-                label="Рядов"
-                name="rows"
-                type="number"
-                min={1}
-                max={40}
-                value={hallForm.form.rows}
-                onChange={(e) =>
-                  resizeGrid(
-                    Math.max(1, Math.min(40, Number(e.target.value) || 1)),
-                    hallForm.form.cols,
-                  )
-                }
-              />
-              <Input
-                label="Мест в ряду"
-                name="cols"
-                type="number"
-                min={1}
-                max={40}
-                value={hallForm.form.cols}
-                onChange={(e) =>
-                  resizeGrid(
-                    hallForm.form.rows,
-                    Math.max(1, Math.min(40, Number(e.target.value) || 1)),
-                  )
-                }
-              />
-            </div>
-
-            <HallGridEditor
-              grid={hallForm.grid}
-              onChange={(grid) => setHallForm({ ...hallForm, grid })}
             />
           </div>
         )}

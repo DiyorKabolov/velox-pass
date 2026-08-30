@@ -28,6 +28,11 @@ COLUMNS = [
         "ALTER TABLE events ADD COLUMN tags VARCHAR(32)[]",
     ),
     (
+        "user_venue_roles",
+        "created_at",
+        "ALTER TABLE user_venue_roles ADD COLUMN created_at TIMESTAMPTZ",
+    ),
+    (
         "events",
         "template_id",
         "ALTER TABLE events ADD COLUMN template_id INTEGER "

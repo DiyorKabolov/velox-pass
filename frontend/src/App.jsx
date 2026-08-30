@@ -10,6 +10,7 @@ import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 import Register from './pages/Register'
 import Scanner from './pages/Scanner'
+import VenueAdminPanel from './pages/VenueAdminPanel'
 import Dashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
 import AdminEventForm from './pages/admin/EventForm'
@@ -53,6 +54,20 @@ function ScannerRoute({ children }) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
   if (!isScanner) {
+    return <Navigate to="/" replace />
+  }
+  return children
+}
+
+/** Venue administrators, plus superadmins who oversee every venue. */
+function VenueAdminRoute({ children }) {
+  const { isAuthenticated, user } = useAuth()
+  const location = useLocation()
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+  }
+  if (user?.role !== 'venue_admin' && user?.role !== 'superadmin') {
     return <Navigate to="/" replace />
   }
   return children
@@ -110,6 +125,15 @@ export default function App() {
               <ScannerRoute>
                 <Scanner />
               </ScannerRoute>
+            }
+          />
+
+          <Route
+            path="/venue-admin"
+            element={
+              <VenueAdminRoute>
+                <VenueAdminPanel />
+              </VenueAdminRoute>
             }
           />
 

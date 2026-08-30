@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import require_staff
+from app.core.deps import get_current_user, require_staff, user_venue_ids
+from app.models.user import User
 from app.core.websocket_manager import manager
 from app.models.event import Event
 from app.models.hall import Hall
@@ -12,6 +13,7 @@ from app.models.seat_price import SeatPrice
 from app.models.session import Session
 from app.models.ticket import Ticket
 from app.models.venue import Venue
+from fastapi import Query
 from app.schemas.session import (
     SeatMapOut,
     SeatMapSeat,
@@ -68,18 +70,71 @@ async def build_session_out(db: AsyncSession, session: Session) -> SessionOut:
     return item
 
 
+async def _allowed_venue_ids(db: AsyncSession, user: User) -> list[int] | None:
+    """Venues the caller may schedule in, or None for "any"."""
+    if user.role == "superadmin":
+        return None
+    return await user_venue_ids(db, user, role="venue_admin")
+
+
+@router.get("", response_model=list[SessionOut])
+async def list_sessions(
+    my_venues: bool = Query(
+        False, description="Только сеансы площадок, закреплённых за пользователем"
+    ),
+    event_id: int | None = None,
+    include_cancelled: bool = False,
+    user: User = Depends(require_staff),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sessions for the staff screens, newest showing last."""
+    query = (
+        select(Session)
+        .join(Event, Event.id == Session.event_id)
+        .outerjoin(Hall, Hall.id == Session.hall_id)
+        .order_by(Session.datetime.asc())
+    )
+    if not include_cancelled:
+        query = query.where(Session.status != "cancelled")
+    if event_id is not None:
+        query = query.where(Session.event_id == event_id)
+
+    if my_venues:
+        allowed = await _allowed_venue_ids(db, user)
+        if allowed is not None:
+            if not allowed:
+                return []
+            # The hall is what actually ties a showing to a venue: events
+            # are created without a venue_id and only reach one through the
+            # hall their session runs in. The event's own venue_id is honoured
+            # too, for the events that do carry one.
+            query = query.where(
+                or_(Hall.venue_id.in_(allowed), Event.venue_id.in_(allowed))
+            )
+
+    result = await db.execute(query)
+    return [await build_session_out(db, s) for s in result.scalars().all()]
+
+
 @router.post("", response_model=SessionOut, status_code=201)
 async def create_session(
     data: SessionCreate,
-    _=Depends(require_staff),
+    user: User = Depends(require_staff),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a showing plus its per-category prices."""
     event = await db.get(Event, data.event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Мероприятие не найдено")
-    if not await db.get(Hall, data.hall_id):
+    hall = await db.get(Hall, data.hall_id)
+    if not hall:
         raise HTTPException(status_code=404, detail="Зал не найден")
+
+    # Being staff is not enough: without this any venue administrator could
+    # schedule a showing in somebody else's hall.
+    allowed = await _allowed_venue_ids(db, user)
+    if allowed is not None and hall.venue_id not in allowed:
+        raise HTTPException(status_code=403, detail="Этот зал вам не назначен")
 
     session = Session(
         event_id=data.event_id,
@@ -169,13 +224,24 @@ async def get_session_seats(session_id: int, db: AsyncSession = Depends(get_db))
 @router.delete("/{session_id}", status_code=200)
 async def cancel_session(
     session_id: int,
-    _=Depends(require_staff),
+    user: User = Depends(require_staff),
     db: AsyncSession = Depends(get_db),
 ):
     """Cancel a showing and tell every open seat map about it."""
     session = await db.get(Session, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Сеанс не найден")
+
+    allowed = await _allowed_venue_ids(db, user)
+    if allowed is not None:
+        # The hall first, exactly as the listing does: an event usually carries
+        # no venue_id of its own, and checking that alone refused the caller
+        # their own showing.
+        hall = await db.get(Hall, session.hall_id) if session.hall_id else None
+        event = await db.get(Event, session.event_id)
+        venue_id = (hall.venue_id if hall else None) or (event.venue_id if event else None)
+        if venue_id not in allowed:
+            raise HTTPException(status_code=403, detail="Этот сеанс вам не назначен")
 
     session.status = "cancelled"
     await db.flush()

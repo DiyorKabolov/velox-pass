@@ -1,17 +1,33 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import bearer_scheme, user_venue_ids
+from app.core.security import verify_token
 from app.core.tags import clean_tags, unknown_tags
 from app.models.event import Event
+from app.models.hall import Hall
 from app.models.seat import Seat
 from app.models.session import Session
 from app.models.ticket import Ticket
+from app.models.user import User
 from app.schemas.event import EventOut
 from app.schemas.session import SessionOut
 
 router = APIRouter(prefix="/events", tags=["events"])
+
+
+async def get_optional_user(
+    db: AsyncSession = Depends(get_db),
+    credentials=Depends(bearer_scheme),
+) -> User | None:
+    """The signed-in user, or None. The listing stays public, so a missing or
+    stale token must not turn into a 401 for an anonymous visitor."""
+    if credentials is None:
+        return None
+    user_id = verify_token(credentials.credentials)
+    return await db.get(User, user_id) if user_id else None
 
 # A showing that no longer sells seats contributes nothing to what is on offer.
 DEAD_SESSION_STATUSES = ("cancelled", "finished")
@@ -126,15 +142,50 @@ async def _serialize(db: AsyncSession, events: list[Event]) -> list[EventOut]:
 @router.get("", response_model=list[EventOut])
 async def list_events(
     upcoming_only: bool = False,
+    my_venues: bool = Query(
+        False,
+        description="Только события площадок, закреплённых за текущим пользователем",
+    ),
     tags: str | None = Query(
         None, description="Через запятую; вернутся события с любым из тегов"
     ),
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
-    """Public event listing used by the home page."""
+    """Public event listing used by the home page.
+
+    Narrowing to the caller's own venues is opt-in through `my_venues`, never
+    automatic. A venue administrator is also an ordinary customer, and silently
+    hiding every other venue's events would leave them browsing a catalogue
+    with most of it missing.
+    """
     query = select(Event).order_by(Event.date.asc())
     if upcoming_only:
         query = query.where(Event.date >= func.now())
+
+    if my_venues:
+        if user is None:
+            raise HTTPException(status_code=401, detail="Необходима авторизация")
+        if user.role == "superadmin":
+            pass  # every venue, so no narrowing
+        else:
+            venue_ids = await user_venue_ids(db, user)
+            if not venue_ids:
+                return []
+            # An event reaches a venue two ways: its own venue_id, or a showing
+            # scheduled in one of that venue's halls. Only the second is set in
+            # practice -- events are created without a venue and bound to one
+            # later by their sessions -- so filtering on venue_id alone would
+            # return nothing at all.
+            in_my_halls = (
+                select(Session.id)
+                .join(Hall, Hall.id == Session.hall_id)
+                .where(Session.event_id == Event.id, Hall.venue_id.in_(venue_ids))
+                .exists()
+            )
+            query = query.where(
+                or_(Event.venue_id.in_(venue_ids), in_my_halls)
+            )
 
     if tags:
         wanted = [part.strip() for part in tags.split(",")]

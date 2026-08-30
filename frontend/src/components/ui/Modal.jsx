@@ -8,7 +8,22 @@ import { X } from 'lucide-react'
  * table or a transformed ancestor. Escape and a backdrop click both close it,
  * and the page behind is locked so only the dialog scrolls.
  */
-export default function Modal({ open, onClose, title, subtitle, footer, children }) {
+// Named sizes rather than a free class, so every dialog picks from the same
+// short list instead of inventing its own width.
+const SIZES = {
+  md: 'max-w-[640px]',
+  lg: 'max-w-4xl',
+}
+
+export default function Modal({
+  open,
+  onClose,
+  title,
+  subtitle,
+  footer,
+  size = 'lg',
+  children,
+}) {
   useEffect(() => {
     if (!open) return undefined
 
@@ -45,7 +60,7 @@ export default function Modal({ open, onClose, title, subtitle, footer, children
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className="my-auto w-full max-w-4xl overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(0,0,0,0.55)]"
+            className={`my-auto w-full ${SIZES[size] ?? SIZES.lg} overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(0,0,0,0.55)]`}
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.985 }}

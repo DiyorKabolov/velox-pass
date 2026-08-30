@@ -20,6 +20,7 @@ from app.routers import (
     scanner,
     sessions,
     tickets,
+    venue_admin,
     venues,
 )
 
@@ -55,6 +56,7 @@ app.include_router(scanner.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(pdf_templates.router, prefix=API_PREFIX)
 app.include_router(pdf_templates.event_router, prefix=API_PREFIX)
+app.include_router(venue_admin.router, prefix=API_PREFIX)
 
 
 @app.get("/api/status", tags=["system"])
