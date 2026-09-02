@@ -1,7 +1,36 @@
 import client from './client'
 
+/** Venues the caller administers. Scoped, and needs a token. */
 export async function getVenues() {
   const { data } = await client.get('/venues')
+  return data
+}
+
+/**
+ * Every venue, for the public catalogue.
+ *
+ * Its own endpoint rather than the one above: that listing narrows to the
+ * venues the caller administers, which is exactly wrong for a page anyone can
+ * open, and widening it would let a venue admin see the rest through the back
+ * door of their own panel.
+ */
+export async function getPublicVenues() {
+  const { data } = await client.get('/venues/public')
+  return data
+}
+
+export async function getPublicVenue(venueId) {
+  const { data } = await client.get(`/venues/public/${venueId}`)
+  return data
+}
+
+/** Upcoming showings at a venue. `date` is optional and means one day only. */
+export async function getVenueSessions(venueId, date) {
+  const { data } = await client.get(`/venues/${venueId}/sessions`, {
+    params: date
+      ? { date, tz_offset_minutes: -new Date().getTimezoneOffset() }
+      : undefined,
+  })
   return data
 }
 
@@ -17,6 +46,25 @@ export async function updateVenue(id, payload) {
 
 export async function deleteVenue(id) {
   await client.delete(`/venues/${id}`)
+}
+
+/**
+ * Replace a venue's photo.
+ *
+ * Served by the admin router: uploading is the superadmin's, while the photo
+ * itself is public. Content-Type is deliberately left alone -- the client
+ * strips its JSON default for FormData so axios can set the multipart boundary.
+ */
+export async function uploadVenueImage(venueId, file) {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await client.post(`/admin/venues/${venueId}/image`, form)
+  return data
+}
+
+export async function deleteVenueImage(venueId) {
+  const { data } = await client.delete(`/admin/venues/${venueId}/image`)
+  return data
 }
 
 export async function getVenueHalls(venueId) {

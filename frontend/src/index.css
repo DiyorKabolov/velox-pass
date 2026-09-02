@@ -116,3 +116,14 @@ body {
   border: 2px solid var(--bg);
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+
+/* A strip that scrolls sideways without a bar across it. Firefox and the
+   WebKit/Blink pseudo-element disagree on how to say this, so both are here;
+   Tailwind has no utility that covers either. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

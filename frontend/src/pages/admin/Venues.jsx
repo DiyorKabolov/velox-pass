@@ -8,28 +8,23 @@ import {
   createVenue,
   deleteHall,
   deleteVenue,
+  deleteVenueImage,
   getVenueHalls,
   getVenues,
+  uploadVenueImage,
 } from '../../api/venues'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
 import Select from '../../components/ui/Select'
 import VenueStaff from '../../components/admin/VenueStaff'
+import EventImageUpload from '../../components/admin/EventImageUpload'
 import HallGridEditor, { gridToLayout, makeGrid } from '../../components/seats/HallGridEditor'
+// Shared with the public catalogue, so a venue keeps one name and one colour.
+import { VENUE_TYPES, VENUE_TYPE_LABELS } from '../../utils/venueTypes'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
-// Values are what the API stores; the map holds what a person reads.
-const VENUE_TYPES = ['cinema', 'theater', 'concert', 'stadium', 'other']
-const VENUE_TYPE_LABELS = {
-  cinema: 'Кинотеатр',
-  theater: 'Театр',
-  concert: 'Концертный зал',
-  stadium: 'Стадион',
-  other: 'Другое',
-}
-
-const EMPTY_VENUE = { name: '', type: 'theater', address: '' }
+const EMPTY_VENUE = { name: '', type: 'theater', address: '', description: '' }
 const EMPTY_HALL = { name: '', rows: 5, cols: 8 }
 
 /** Pill tabs matching the admin strip above. */
@@ -213,7 +208,71 @@ function HallsTab({ venueId }) {
   )
 }
 
-/** Halls and staff of one venue, behind two tabs. */
+/**
+ * The venue's photo, sent the moment it is chosen.
+ *
+ * Unlike an event, which may still be unsaved when its artwork is picked, a
+ * venue always exists by the time this is on screen -- so there is nothing to
+ * hold the file for, and the upload happens straight away.
+ */
+function PhotoTab({ venue }) {
+  const queryClient = useQueryClient()
+  const [stored, setStored] = useState(venue.image_url ?? null)
+  const [pending, setPending] = useState(null)
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['venues'] })
+    queryClient.invalidateQueries({ queryKey: ['venues', 'public'] })
+  }
+
+  const upload = useMutation({
+    mutationFn: (file) => uploadVenueImage(venue.id, file),
+    onSuccess: (updated) => {
+      setStored(updated.image_url)
+      setPending(null)
+      refresh()
+      toast.success('Фото обновлено')
+    },
+    onError: (error) => {
+      setPending(null)
+      toast.error(apiError(error, 'Не удалось загрузить фото'))
+    },
+  })
+
+  const remove = useMutation({
+    mutationFn: () => deleteVenueImage(venue.id),
+    onSuccess: () => {
+      setStored(null)
+      refresh()
+      toast.success('Фото удалено')
+    },
+    onError: (error) => toast.error(apiError(error, 'Не удалось удалить фото')),
+  })
+
+  return (
+    <div className="space-y-3">
+      <EventImageUpload
+        alt={`Фото площадки ${venue.name}`}
+        value={stored}
+        // Shown from the local file while the upload is in flight, so the new
+        // photo appears at once instead of after the round trip.
+        file={pending}
+        busy={upload.isPending || remove.isPending}
+        onPick={(file) => {
+          setPending(file)
+          upload.mutate(file)
+        }}
+        onRemove={() => remove.mutate()}
+      />
+      <p className="text-xs text-[var(--muted2)]">
+        Показывается в списке площадок. Лучше горизонтальное фото — его видно
+        полосой 200×88.
+      </p>
+    </div>
+  )
+}
+
+/** Halls, staff and photo of one venue, behind three tabs. */
 function VenueModal({ venue, onClose }) {
   const [tab, setTab] = useState('halls')
 
@@ -240,15 +299,16 @@ function VenueModal({ venue, onClose }) {
             <Tab active={tab === 'staff'} onClick={() => setTab('staff')}>
               Персонал
             </Tab>
+            <Tab active={tab === 'photo'} onClick={() => setTab('photo')}>
+              Фото
+            </Tab>
           </div>
 
           {/* Remounted per venue, so switching venues never shows the previous
               one's halls while the new request is in flight. */}
-          {tab === 'halls' ? (
-            <HallsTab key={venue.id} venueId={venue.id} />
-          ) : (
-            <VenueStaff key={venue.id} venueId={venue.id} bare />
-          )}
+          {tab === 'halls' && <HallsTab key={venue.id} venueId={venue.id} />}
+          {tab === 'staff' && <VenueStaff key={venue.id} venueId={venue.id} bare />}
+          {tab === 'photo' && <PhotoTab key={venue.id} venue={venue} />}
         </>
       )}
     </Modal>
@@ -393,6 +453,7 @@ export default function Venues() {
                   name: venueForm.name.trim(),
                   type: venueForm.type,
                   address: venueForm.address.trim() || null,
+                  description: venueForm.description.trim() || null,
                 })
               }}
             >
@@ -432,6 +493,24 @@ export default function Venues() {
               onChange={(e) => setVenueForm({ ...venueForm, address: e.target.value })}
               placeholder="ул. Главная, 1"
             />
+            <label className="block" htmlFor="venue-description">
+              <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+                Описание
+              </span>
+              <textarea
+                id="venue-description"
+                rows={3}
+                value={venueForm.description}
+                onChange={(e) =>
+                  setVenueForm({ ...venueForm, description: e.target.value })
+                }
+                placeholder="Что стоит знать посетителю — залы, парковка, как добраться."
+                className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-[var(--text)] outline-none transition-all duration-150 placeholder:text-[var(--muted2)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25"
+              />
+              <span className="mt-1.5 block text-xs text-[var(--muted2)]">
+                Показывается на публичной странице площадки.
+              </span>
+            </label>
           </div>
         )}
       </Modal>

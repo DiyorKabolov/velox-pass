@@ -56,19 +56,20 @@ export function TableShell({ children }) {
   )
 }
 
-export function Th({ children, className = '' }) {
+export function Th({ children, className = '', ...props }) {
   return (
     <th
       className={`border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3 font-mono2 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)] ${className}`}
+      {...props}
     >
       {children}
     </th>
   )
 }
 
-export function Td({ children, className = '' }) {
+export function Td({ children, className = '', ...props }) {
   return (
-    <td className={`border-b border-[var(--border)] px-4 py-3 ${className}`}>
+    <td className={`border-b border-[var(--border)] px-4 py-3 ${className}`} {...props}>
       {children}
     </td>
   )

@@ -30,6 +30,24 @@ export async function deleteEvent(id) {
   await client.delete(`/admin/events/${id}`)
 }
 
+/**
+ * Replace an event's artwork. The event has to exist first, so on the create
+ * page this runs after the event is saved, not with it.
+ */
+export async function uploadEventImage(eventId, file) {
+  const form = new FormData()
+  form.append('file', file)
+  // No explicit Content-Type: the browser must add the multipart boundary, and
+  // setting the header by hand strips it.
+  const { data } = await client.post(`/admin/events/${eventId}/image`, form)
+  return data
+}
+
+export async function deleteEventImage(eventId) {
+  const { data } = await client.delete(`/admin/events/${eventId}/image`)
+  return data
+}
+
 /** Showings of one event, soonest first. Cancelled ones are excluded. */
 export async function getEventSessions(eventId) {
   const { data } = await client.get(`/events/${eventId}/sessions`)

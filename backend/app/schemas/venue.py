@@ -9,12 +9,14 @@ class VenueCreate(BaseModel):
     # cinema | theater | concert | stadium | other
     type: str = "other"
     address: str | None = None
+    description: str | None = None
 
 
 class VenueUpdate(BaseModel):
     name: str | None = None
     type: str | None = None
     address: str | None = None
+    description: str | None = None
 
 
 class VenueOut(BaseModel):
@@ -24,8 +26,14 @@ class VenueOut(BaseModel):
     name: str
     type: str
     address: str | None
+    description: str | None = None
+    image_url: str | None = None
     created_at: datetime
     halls_count: int = 0
+    # Distinct events with at least one showing still to come. Filled in by the
+    # listing endpoints; zero elsewhere rather than absent, so the public cards
+    # never have to guard against a missing field.
+    active_events_count: int = 0
 
 
 class HallCreate(BaseModel):
@@ -70,3 +78,23 @@ class HallOut(BaseModel):
     layout_json: dict[str, Any] | None
     seats_count: int = 0
     seats: list[SeatOut] = []
+
+
+class VenueSessionOut(BaseModel):
+    """One showing on a venue's public schedule.
+
+    Flat on purpose: the schedule renders a whole month of these, and the page
+    should not have to follow a reference per row to learn what is playing.
+    """
+
+    session_id: int
+    event_id: int
+    event_title: str
+    event_image_url: str | None = None
+    # The event's own colour, so a showing with no artwork still gets a
+    # placeholder that belongs to it rather than a grey box.
+    card_accent: str | None = None
+    hall_name: str | None = None
+    datetime: datetime
+    available_seats: int = 0
+    min_price: float | None = None

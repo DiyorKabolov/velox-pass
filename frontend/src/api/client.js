@@ -13,6 +13,20 @@ client.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+
+  // A file upload has to travel as multipart with the boundary the browser
+  // generates, and axios fills that in by itself -- but only when nothing has
+  // already set the header. The JSON default above counts as "already set", so
+  // the body went out labelled JSON, the server could not find the file field,
+  // and every upload came back 422. Dropping the header here lets axios do it.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    if (typeof config.headers.delete === 'function') {
+      config.headers.delete('Content-Type')
+    } else {
+      delete config.headers['Content-Type']
+    }
+  }
+
   return config
 })
 

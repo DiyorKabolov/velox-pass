@@ -1,6 +1,24 @@
+import { plural } from './plural'
+
+// Genitive case: the format reads "12 марта 2026", where the month follows the
+// day number and has to agree with it. Nominative ("март") would be wrong there.
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+]
+
+// Nominative: these stand on their own in a day heading rather than following
+// a number, so "сентябрь" would be wrong only where MONTHS above is right.
+const WEEKDAYS = [
+  'Воскресенье', 'Понедельник', 'Вторник', 'Среда',
+  'Четверг', 'Пятница', 'Суббота',
+]
+
+export const WEEKDAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+
+export const MONTHS_SHORT = [
+  'янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+  'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
 ]
 
 function toDate(value) {
@@ -11,7 +29,7 @@ function toDate(value) {
 
 const pad = (n) => String(n).padStart(2, '0')
 
-/** "12 March 2026, 19:30" */
+/** "12 марта 2026, 19:30" */
 export function formatDate(value) {
   const date = toDate(value)
   if (!date) return '—'
@@ -39,7 +57,7 @@ export function isExpired(value) {
   return date.getTime() < Date.now()
 }
 
-/** "in 3 days" / "2 hours ago" */
+/** "через 3 дня" / "2 часа назад" */
 export function relativeTime(value) {
   const date = toDate(value)
   if (!date) return '—'
@@ -50,20 +68,21 @@ export function relativeTime(value) {
   const day = 24 * hour
 
   let amount
-  let unit
+  let word
   if (abs < hour) {
     amount = Math.round(abs / minute)
-    unit = 'minute'
+    // The accusative singular happens to serve both directions here:
+    // "через минуту" and "минуту назад".
+    word = plural(amount, 'минуту', 'минуты', 'минут')
   } else if (abs < day) {
     amount = Math.round(abs / hour)
-    unit = 'hour'
+    word = plural(amount, 'час', 'часа', 'часов')
   } else {
     amount = Math.round(abs / day)
-    unit = 'day'
+    word = plural(amount, 'день', 'дня', 'дней')
   }
 
-  const plural = amount === 1 ? '' : 's'
-  return diff >= 0 ? `in ${amount} ${unit}${plural}` : `${amount} ${unit}${plural} ago`
+  return diff >= 0 ? `через ${amount} ${word}` : `${amount} ${word} назад`
 }
 
 /** "2026-05-15" — local calendar date, not UTC. */
@@ -95,4 +114,37 @@ export function fromDatetimeLocal(value) {
   if (!value) return null
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+/** "Пятница, 5 сентября" — the heading over one day of a schedule.
+ *
+ *  Today and tomorrow are named instead: on a timetable that is what the reader
+ *  is actually looking for, and the date alone makes them work it out.
+ */
+export function formatDayLabel(value) {
+  const date = toDate(value)
+  if (!date) return '—'
+
+  const midnight = new Date()
+  midnight.setHours(0, 0, 0, 0)
+  const days = Math.round((startOfDay(date) - midnight) / 86_400_000)
+  const day = `${date.getDate()} ${MONTHS[date.getMonth()]}`
+
+  if (days === 0) return `Сегодня, ${day}`
+  if (days === 1) return `Завтра, ${day}`
+  return `${WEEKDAYS[date.getDay()]}, ${day}`
+}
+
+/** Midnight of the day a moment falls on, in local time. */
+export function startOfDay(value) {
+  const date = toDate(value)
+  if (!date) return null
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+/** "2026-09-05" for the local day a moment falls on — a stable grouping key. */
+export function dayKey(value) {
+  const date = toDate(value)
+  if (!date) return ''
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }

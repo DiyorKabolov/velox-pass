@@ -14,6 +14,71 @@ function buzz(ok) {
   navigator.vibrate(ok ? [40] : [60, 40, 60])
 }
 
+// A camera pointing away from the operator. Browsers localise these labels,
+// so the Russian wordings are listed alongside the English ones.
+const REAR_LABEL = /back|rear|environment|задн|основ|тыл/i
+
+/** The active camera's facing mode, or null where the browser will not say. */
+function readFacingMode(qr) {
+  try {
+    return qr.getRunningTrackSettings()?.facingMode ?? null
+  } catch {
+    // The track went away between starting and asking.
+    return null
+  }
+}
+
+/** Errors no amount of retrying with another camera will get past. */
+const isFatal = (err) =>
+  /NotAllowed|Permission|NotFound|Security|Denied/i.test(String(err?.name || err || ''))
+
+/**
+ * Start a camera that faces away from the operator.
+ *
+ * `{ facingMode: 'environment' }` on its own is only a preference: a browser
+ * that cannot honour it hands back the front camera and says nothing. That is
+ * what makes a scan come out mirrored -- several platforms deliver front-camera
+ * frames already flipped, and the flip is in the pixels the decoder reads, not
+ * merely in how they are displayed, so a mirrored QR code fails its checksum
+ * and never scans. Asking `exact` makes the request fail instead of silently
+ * substituting, which is what lets the fallbacks below run deliberately.
+ *
+ * Resolves to whether the camera it settled on really does face away. That is
+ * not the same question as `facingMode === 'user'`: a plain desktop webcam
+ * usually reports no facing mode at all, so only the two branches that pick a
+ * rear camera on purpose can answer it with confidence.
+ */
+async function startRearCamera(qr, config, onCode) {
+  // Per-frame decode misses are normal; ignore them.
+  const ignoreMisses = () => {}
+
+  try {
+    await qr.start({ facingMode: { exact: 'environment' } }, config, onCode, ignoreMisses)
+    return true
+  } catch (err) {
+    if (isFatal(err)) throw err
+  }
+
+  // Some browsers refuse the exact constraint yet still list the camera, so
+  // take it by id instead. Labels are readable once permission has been given,
+  // which the attempt above has just obtained.
+  try {
+    const cameras = await Html5Qrcode.getCameras()
+    const rear = cameras.find((camera) => REAR_LABEL.test(camera.label || ''))
+    if (rear) {
+      await qr.start(rear.id, config, onCode, ignoreMisses)
+      return true
+    }
+  } catch (err) {
+    if (isFatal(err)) throw err
+  }
+
+  // Nothing rear-facing on this device: run what there is and let the caller
+  // warn about it, rather than showing a black screen.
+  await qr.start({ facingMode: 'environment' }, config, onCode, ignoreMisses)
+  return readFacingMode(qr) === 'environment'
+}
+
 function Brackets() {
   const corner =
     'absolute h-9 w-9 border-[var(--accent)] transition-colors duration-200'
@@ -37,6 +102,7 @@ export default function Scanner() {
   const [count, setCount] = useState(0)
   const [result, setResult] = useState(null)
   const [flash, setFlash] = useState(false)
+  const [frontCamera, setFrontCamera] = useState(false)
 
   const qrRef = useRef(null)
   // Guards the cooldown from inside the scanner callback, where state would
@@ -83,23 +149,36 @@ export default function Scanner() {
     qrRef.current = qr
     let stopped = false
 
-    qr.start(
-      { facingMode: 'environment' },
+    startRearCamera(
+      qr,
       // No qrbox on purpose. It would make html5-qrcode draw its own shaded
-      // region, positioned for an unscaled video — but the feed is rendered
-      // with object-cover, so that overlay never lines up with the brackets
-      // below. Without it the whole frame is scanned and only our guide shows.
+      // region, positioned for an unscaled video, but the feed is rendered with
+      // object-cover, so that overlay never lines up with the brackets below.
+      // Without it the whole frame is scanned and only our guide shows.
       { fps: 10 },
       handleCode,
-      // Per-frame decode misses are normal; ignore them.
-      () => {},
     )
-      .then(() => !stopped && setRunning(true))
+      .then((rear) => {
+        // Leaving the page can now beat the camera coming up, since there are
+        // up to three attempts to get through; the light must not stay on.
+        if (stopped) {
+          qr.stop().catch(() => {})
+          return
+        }
+        setRunning(true)
+        // Anything not confirmed rear-facing is treated as a front camera: it
+        // is the one that gets the mirrored preview, and the one whose frames
+        // may arrive mirrored too, which no amount of display work can fix.
+        setFrontCamera(!rear)
+      })
       .catch((err) => {
+        const text = String(err?.name || err || '')
         setError(
-          String(err).includes('NotAllowedError') || String(err).includes('Permission')
+          /NotAllowed|Permission|Denied/i.test(text)
             ? 'Доступ к камере запрещён. Разрешите его в настройках браузера.'
-            : 'Не удалось запустить камеру. Нужен HTTPS или localhost.',
+            : /NotFound|Overconstrained/i.test(text)
+              ? 'Камера не найдена.'
+              : 'Не удалось запустить камеру. Нужен HTTPS или localhost.',
         )
       })
 
@@ -126,7 +205,15 @@ export default function Scanner() {
       <div className="absolute inset-0 overflow-hidden bg-black">
         <div
           id={READER_ID}
-          className="h-full w-full [&>div]:!h-full [&>div]:!w-full [&>div]:!border-0 [&>div]:!p-0 [&_img]:hidden [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover"
+          className={[
+            'h-full w-full [&>div]:!h-full [&>div]:!w-full [&>div]:!border-0 [&>div]:!p-0',
+            '[&_img]:hidden [&_video]:!h-full [&_video]:!w-full [&_video]:!object-cover',
+            // Mirrored, so aiming at a front camera works the way a mirror
+            // does rather than in reverse. Display only: the decoder reads the
+            // video through a canvas, which CSS never touches, so this changes
+            // how the feed looks and nothing about what is scanned.
+            frontCamera ? '[&_video]:![transform:scaleX(-1)]' : '',
+          ].join(' ')}
         />
       </div>
 
@@ -162,9 +249,18 @@ export default function Scanner() {
       )}
 
       {!error && (
-        <p className="relative z-10 mt-auto pb-8 text-center text-sm text-white/70 drop-shadow">
-          Наведите камеру на QR-код билета
-        </p>
+        <div className="relative z-10 mt-auto px-6 pb-8 text-center">
+          {frontCamera ? (
+            <p className="mx-auto max-w-xs rounded-[var(--radius-sm)] bg-black/60 px-4 py-3 text-sm text-white/85 backdrop-blur">
+              Задняя камера недоступна. Фронтальная часто отдаёт зеркальный кадр —
+              такой QR-код не читается. Откройте сканер на телефоне.
+            </p>
+          ) : (
+            <p className="text-sm text-white/70 drop-shadow">
+              Наведите камеру на QR-код билета
+            </p>
+          )}
+        </div>
       )}
 
       {/* Result overlay */}

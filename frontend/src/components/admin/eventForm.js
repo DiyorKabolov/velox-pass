@@ -25,6 +25,9 @@ export const EMPTY_EVENT = {
   has_seats: false,
   tags: [],
   template_id: null,
+  image_url: null,
+  // Held only until the event has an id to upload against.
+  image_file: null,
   ...DEFAULT_COLORS,
 }
 
@@ -40,6 +43,8 @@ export function toFormValue(event) {
     has_seats: Boolean(event.has_seats),
     tags: orderTags(event.tags),
     template_id: event.template_id ?? null,
+    image_url: event.image_url ?? null,
+    image_file: null,
     card_bg: event.card_bg || DEFAULT_COLORS.card_bg,
     card_accent: event.card_accent || DEFAULT_COLORS.card_accent,
     card_text: event.card_text || DEFAULT_COLORS.card_text,

@@ -1,11 +1,17 @@
+from collections import defaultdict
+from datetime import date as date_type
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import VenueScope, get_current_venue_admin, require_superadmin
+from app.models.event import Event
 from app.models.hall import Hall
 from app.models.seat import Seat
+from app.models.seat_price import SeatPrice
 from app.models.session import Session
 from app.models.ticket import Ticket
 from app.models.venue import Venue
@@ -16,6 +22,7 @@ from app.schemas.venue import (
     SeatOut,
     VenueCreate,
     VenueOut,
+    VenueSessionOut,
     VenueUpdate,
 )
 
@@ -142,6 +149,192 @@ async def create_venue(
     await db.flush()
     await db.refresh(venue)
     return VenueOut.model_validate(venue)
+
+
+# --- public -----------------------------------------------------------------
+# These have to be declared above the routes taking a {venue_id}, or "public"
+# would be read as a venue id and never reach them.
+#
+# The listing above is deliberately not the public one: it is scoped, so a venue
+# administrator sees only their own venues there, and opening it up would undo
+# that. The visitor-facing catalogue is its own endpoint, needs no sign-in, and
+# returns every venue.
+
+
+async def _upcoming_event_counts(db: AsyncSession) -> dict[int, int]:
+    """Distinct events per venue that still have a showing to come.
+
+    Counted through both links a showing can reach a venue by: the hall it runs
+    in, and the event's own venue_id for the events that carry one. The venue
+    schedule below matches on exactly the same pair, so the number on the card
+    and the schedule behind it cannot disagree.
+    """
+    now = datetime.now(timezone.utc)
+    live = (Session.datetime > now, Session.status != "cancelled")
+
+    by_hall = await db.execute(
+        select(Hall.venue_id, Session.event_id)
+        .select_from(Session)
+        .join(Hall, Hall.id == Session.hall_id)
+        .where(*live)
+    )
+    by_event = await db.execute(
+        select(Event.venue_id, Session.event_id)
+        .select_from(Session)
+        .join(Event, Event.id == Session.event_id)
+        .where(*live, Event.venue_id.is_not(None))
+    )
+
+    events: dict[int, set[int]] = defaultdict(set)
+    for venue_id, event_id in list(by_hall.all()) + list(by_event.all()):
+        events[venue_id].add(event_id)
+    return {venue_id: len(ids) for venue_id, ids in events.items()}
+
+
+@router.get("/public", response_model=list[VenueOut])
+async def list_public_venues(db: AsyncSession = Depends(get_db)):
+    """Every venue, for the visitor-facing catalogue. No sign-in required."""
+    venues = list((await db.execute(select(Venue).order_by(Venue.name))).scalars().all())
+
+    halls = dict(
+        (
+            await db.execute(
+                select(Hall.venue_id, func.count(Hall.id)).group_by(Hall.venue_id)
+            )
+        ).all()
+    )
+    events = await _upcoming_event_counts(db)
+
+    payload = []
+    for venue in venues:
+        item = VenueOut.model_validate(venue)
+        item.halls_count = halls.get(venue.id, 0)
+        item.active_events_count = events.get(venue.id, 0)
+        payload.append(item)
+    return payload
+
+
+@router.get("/public/{venue_id}", response_model=VenueOut)
+async def get_public_venue(venue_id: int, db: AsyncSession = Depends(get_db)):
+    """One venue, for its public page."""
+    venue = await db.get(Venue, venue_id)
+    if not venue:
+        raise HTTPException(status_code=404, detail="Площадка не найдена")
+
+    item = VenueOut.model_validate(venue)
+    item.halls_count = await db.scalar(
+        select(func.count(Hall.id)).where(Hall.venue_id == venue_id)
+    )
+    item.active_events_count = (await _upcoming_event_counts(db)).get(venue_id, 0)
+    return item
+
+
+@router.get("/{venue_id}/sessions", response_model=list[VenueSessionOut])
+async def venue_sessions(
+    venue_id: int,
+    date: date_type | None = Query(
+        None, description="Только сеансы этого дня, ГГГГ-ММ-ДД"
+    ),
+    tz_offset_minutes: int = Query(
+        0,
+        ge=-840,
+        le=840,
+        description="Часовой пояс, в котором понимать date: минуты к востоку от UTC",
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upcoming showings at a venue, for its public schedule.
+
+    Public: this is the timetable on the door. Past and cancelled showings are
+    left out, since nothing can be bought for them.
+    """
+    if not await db.get(Venue, venue_id):
+        raise HTTPException(status_code=404, detail="Площадка не найдена")
+
+    now = datetime.now(timezone.utc)
+    query = (
+        select(Session, Event, Hall)
+        .select_from(Session)
+        .join(Event, Event.id == Session.event_id)
+        .outerjoin(Hall, Hall.id == Session.hall_id)
+        .where(
+            Session.datetime > now,
+            Session.status != "cancelled",
+            # A showing reaches a venue through its hall; the event's own
+            # venue_id is honoured too, for the events that carry one.
+            or_(Hall.venue_id == venue_id, Event.venue_id == venue_id),
+        )
+        .order_by(Session.datetime.asc())
+    )
+
+    if date is not None:
+        # A calendar day is a day somewhere: with no zone the window would be
+        # the UTC one, which is the wrong day for anyone far enough east.
+        zone = timezone(timedelta(minutes=tz_offset_minutes))
+        start = datetime.combine(date, datetime.min.time(), tzinfo=zone)
+        query = query.where(
+            Session.datetime >= start, Session.datetime < start + timedelta(days=1)
+        )
+
+    rows = list((await db.execute(query)).all())
+    if not rows:
+        return []
+
+    session_ids = [session.id for session, _, _ in rows]
+    hall_ids = {hall.id for _, _, hall in rows if hall is not None}
+
+    # Three bulk queries rather than three per row: a busy cinema puts hundreds
+    # of showings on this page.
+    seats_total = (
+        dict(
+            (
+                await db.execute(
+                    select(Seat.hall_id, func.count(Seat.id))
+                    .where(Seat.hall_id.in_(hall_ids), Seat.is_aisle.is_(False))
+                    .group_by(Seat.hall_id)
+                )
+            ).all()
+        )
+        if hall_ids
+        else {}
+    )
+    seats_taken = dict(
+        (
+            await db.execute(
+                select(Ticket.session_id, func.count(Ticket.id))
+                .where(Ticket.session_id.in_(session_ids), Ticket.seat_id.is_not(None))
+                .group_by(Ticket.session_id)
+            )
+        ).all()
+    )
+    cheapest = dict(
+        (
+            await db.execute(
+                select(SeatPrice.session_id, func.min(SeatPrice.price))
+                .where(SeatPrice.session_id.in_(session_ids))
+                .group_by(SeatPrice.session_id)
+            )
+        ).all()
+    )
+
+    payload = []
+    for session, event, hall in rows:
+        total = seats_total.get(hall.id, 0) if hall else 0
+        price = cheapest.get(session.id)
+        payload.append(
+            VenueSessionOut(
+                session_id=session.id,
+                event_id=event.id,
+                event_title=event.title,
+                event_image_url=event.image_url,
+                card_accent=event.card_accent,
+                hall_name=hall.name if hall else None,
+                datetime=session.datetime,
+                available_seats=max(total - seats_taken.get(session.id, 0), 0),
+                min_price=float(price) if price is not None else None,
+            )
+        )
+    return payload
 
 
 @router.get("/{venue_id}", response_model=VenueOut)

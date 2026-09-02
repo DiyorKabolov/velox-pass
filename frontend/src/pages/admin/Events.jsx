@@ -4,7 +4,12 @@ import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { getAdminEvents } from '../../api/admin'
-import { deleteEvent, updateEvent } from '../../api/events'
+import {
+  deleteEvent,
+  deleteEventImage,
+  updateEvent,
+  uploadEventImage,
+} from '../../api/events'
 import { setEventTemplate } from '../../api/pdfTemplates'
 import { apiError } from '../../api/client'
 import { formatShortDate } from '../../utils/dates'
@@ -32,10 +37,13 @@ export default function Events() {
   }
 
   const save = useMutation({
-    mutationFn: async ({ id, payload, templateId }) => {
+    mutationFn: async ({ id, payload, templateId, imageFile, imageCleared }) => {
       const event = await updateEvent(id, payload)
       // Its own endpoint, per the API: the event schemas do not carry it.
       await setEventTemplate(id, templateId ?? null)
+      // A newly chosen file wins; clearing without choosing one removes it.
+      if (imageFile) await uploadEventImage(id, imageFile)
+      else if (imageCleared) await deleteEventImage(id)
       return event
     },
     onSuccess: () => {
@@ -65,6 +73,9 @@ export default function Events() {
       id: editing.id,
       payload: toPayload(editing.form),
       templateId: editing.form.template_id,
+      imageFile: editing.form.image_file,
+      // Was there a picture when the dialog opened, and is it gone now?
+      imageCleared: Boolean(editing.original?.image_url) && !editing.form.image_url,
     })
   }
 
@@ -123,7 +134,16 @@ export default function Events() {
                       size="sm"
                       variant="ghost"
                       aria-label={`Редактировать ${event.title}`}
-                      onClick={() => setEditing({ id: event.id, form: toFormValue(event) })}
+                      onClick={() =>
+                        // The untouched event is kept alongside the form so the
+                        // save can tell a removed picture from one that was
+                        // never there.
+                        setEditing({
+                          id: event.id,
+                          original: event,
+                          form: toFormValue(event),
+                        })
+                      }
                     >
                       <Pencil size={13} />
                     </Button>

@@ -1,5 +1,8 @@
 """Superadmin-only management endpoints."""
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,6 +17,7 @@ from app.models.ticket import Ticket
 from app.models.user import User
 from app.schemas.event import EventCreate, EventOut, EventUpdate
 from app.schemas.ticket import TicketOut
+from app.schemas.venue import VenueOut
 from app.schemas.user import (
     UserAdminOut,
     UserOut,
@@ -297,3 +301,180 @@ async def remove_venue_staff(
         )
         if not left:
             user.role = "user"
+
+
+# --- event artwork --------------------------------------------------------
+
+IMAGE_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "uploads", "events")
+)
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+# Magic numbers, not the filename or the declared content type: both come from
+# the caller and neither says what the bytes actually are.
+IMAGE_SIGNATURES = [
+    (bytes.fromhex("ffd8ff"), ".jpg"),
+    (bytes.fromhex("89504e470d0a1a0a"), ".png"),
+    (b"GIF87a", ".gif"),
+    (b"GIF89a", ".gif"),
+    (b"RIFF", ".webp"),  # confirmed against the WEBP tag below
+]
+
+
+def _image_extension(payload: bytes) -> str | None:
+    for signature, extension in IMAGE_SIGNATURES:
+        if not payload.startswith(signature):
+            continue
+        if extension == ".webp" and payload[8:12] != b"WEBP":
+            continue
+        return extension
+    return None
+
+
+def _accept_image(payload: bytes) -> str:
+    """Whether these bytes may be stored, and as what. Raises if they may not.
+
+    Shared by every upload, so a rule tightened here is tightened everywhere
+    rather than in whichever endpoint someone remembered.
+    """
+    if not payload:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+    if len(payload) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Изображение больше 5 МБ")
+
+    extension = _image_extension(payload)
+    if extension is None:
+        raise HTTPException(
+            status_code=400, detail="Нужен файл JPEG, PNG, GIF или WebP"
+        )
+    return extension
+
+
+@router.post("/events/{event_id}/image", response_model=EventOut)
+async def upload_event_image(
+    event_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Replace an event's artwork. The old file is removed once the new one is
+    in place, so re-uploading does not pile up orphans."""
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+
+    payload = await file.read()
+    extension = _accept_image(payload)
+
+    os.makedirs(IMAGE_DIR, exist_ok=True)
+    # A generated name, never the uploaded one, which is attacker-supplied and
+    # could carry path separators out of the directory.
+    stored = f"{uuid.uuid4().hex}{extension}"
+    with open(os.path.join(IMAGE_DIR, stored), "wb") as handle:
+        handle.write(payload)
+
+    previous = event.image_url
+    # Relative to the site root, so the address survives the tunnel changing host.
+    event.image_url = f"/uploads/events/{stored}"
+    await db.flush()
+
+    if previous and previous.startswith("/uploads/events/"):
+        try:
+            old = os.path.join(IMAGE_DIR, os.path.basename(previous))
+            if os.path.isfile(old):
+                os.remove(old)
+        except OSError:
+            # The row already points at the new file; a stray one is not worth
+            # failing the request over.
+            pass
+
+    await db.refresh(event)
+    return EventOut.model_validate(event)
+
+
+@router.delete("/events/{event_id}/image", response_model=EventOut)
+async def delete_event_image(event_id: int, db: AsyncSession = Depends(get_db)):
+    event = await db.get(Event, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+
+    previous = event.image_url
+    event.image_url = None
+    await db.flush()
+
+    if previous and previous.startswith("/uploads/events/"):
+        try:
+            path = os.path.join(IMAGE_DIR, os.path.basename(previous))
+            if os.path.isfile(path):
+                os.remove(path)
+        except OSError:
+            pass
+
+    await db.refresh(event)
+    return EventOut.model_validate(event)
+
+
+# --- venue photo ----------------------------------------------------------
+
+VENUE_IMAGE_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "uploads", "venues")
+)
+
+
+def _drop_venue_files(venue_id: int, keep: str | None = None) -> None:
+    """Remove a venue's stored photos, whatever extension they were saved with.
+
+    A venue's file is named after the venue, so a JPEG replacing a PNG does not
+    overwrite it -- both would sit there and the old one would be served
+    whenever the row still pointed at it.
+    """
+    try:
+        for name in os.listdir(VENUE_IMAGE_DIR):
+            if name != keep and name.partition(".")[0] == str(venue_id):
+                os.remove(os.path.join(VENUE_IMAGE_DIR, name))
+    except OSError:
+        # Nothing here is worth failing an upload over: the row already points
+        # at the file that matters.
+        pass
+
+
+@router.post("/venues/{venue_id}/image", response_model=VenueOut)
+async def upload_venue_image(
+    venue_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Replace a venue's photo."""
+    venue = await db.get(Venue, venue_id)
+    if not venue:
+        raise HTTPException(status_code=404, detail="Площадка не найдена")
+
+    payload = await file.read()
+    extension = _accept_image(payload)
+
+    os.makedirs(VENUE_IMAGE_DIR, exist_ok=True)
+    stored = f"{venue_id}{extension}"
+    with open(os.path.join(VENUE_IMAGE_DIR, stored), "wb") as handle:
+        handle.write(payload)
+    _drop_venue_files(venue_id, keep=stored)
+
+    # The file name is fixed, so the address would not change when the photo
+    # does and every browser that had seen the old one would go on showing it.
+    # The stamp makes each upload a new address.
+    venue.image_url = f"/uploads/venues/{stored}?v={uuid.uuid4().hex[:8]}"
+    await db.flush()
+    await db.refresh(venue)
+    return VenueOut.model_validate(venue)
+
+
+@router.delete("/venues/{venue_id}/image", response_model=VenueOut)
+async def delete_venue_image(venue_id: int, db: AsyncSession = Depends(get_db)):
+    venue = await db.get(Venue, venue_id)
+    if not venue:
+        raise HTTPException(status_code=404, detail="Площадка не найдена")
+
+    venue.image_url = None
+    await db.flush()
+    _drop_venue_files(venue_id)
+
+    await db.refresh(venue)
+    return VenueOut.model_validate(venue)

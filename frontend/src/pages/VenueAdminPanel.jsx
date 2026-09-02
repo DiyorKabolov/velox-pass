@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Grid3x3,
   Plus,
+  Repeat,
   Ticket as TicketIcon,
   Users,
   Wallet,
@@ -20,11 +21,14 @@ import {
   getMyStats,
   getMyVenues,
 } from '../api/venueAdmin'
-import { createSession, deleteSession } from '../api/sessions'
+import { cancelSessionGroup, createSessions, deleteSession } from '../api/sessions'
 import { getHall, getVenueHalls } from '../api/venues'
 import { formatDate, formatDateTime, isExpired } from '../utils/dates'
 import { formatPrice, ticketState, STATE_LABELS } from '../utils/ticketGroups'
 import { pluralize } from '../utils/plural'
+import { emptyRule, ruleToPayload, validateRule } from '../utils/recurrence'
+import { creationMessage, groupSessions } from '../utils/sessionGroups'
+import RecurrenceEditor from '../components/admin/RecurrenceEditor'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -202,6 +206,25 @@ function HallsTab({ venues }) {
   )
 }
 
+function SessionRow({ session, busy, onCancel }) {
+  return (
+    <Panel className="flex flex-wrap items-center gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm">{session.event_title}</p>
+        <p className="mt-0.5 text-xs text-[var(--muted2)]">
+          {session.hall_name ?? 'Зал не указан'} · {formatDateTime(session.datetime)}
+        </p>
+      </div>
+      <span className="shrink-0 font-mono2 text-xs text-[var(--muted)]">
+        {session.seats_free} / {session.seats_total}
+      </span>
+      <Button size="sm" variant="danger" loading={busy} onClick={onCancel}>
+        Отменить
+      </Button>
+    </Panel>
+  )
+}
+
 function SessionsTab({ venues, events }) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState(null)
@@ -223,13 +246,24 @@ function SessionsTab({ venues, events }) {
   }
 
   const add = useMutation({
-    mutationFn: createSession,
-    onSuccess: () => {
+    mutationFn: createSessions,
+    onSuccess: (result) => {
       refresh()
       setForm(null)
-      toast.success('Сеанс создан')
+      toast.success(creationMessage(result))
     },
     onError: (error) => toast.error(apiError(error, 'Не удалось создать сеанс')),
+  })
+
+  const cancelSeries = useMutation({
+    mutationFn: cancelSessionGroup,
+    onSuccess: (result) => {
+      refresh()
+      toast.success(
+        `Отменено ${pluralize(result?.cancelled ?? 0, 'сеанс', 'сеанса', 'сеансов')}`,
+      )
+    },
+    onError: (error) => toast.error(apiError(error, 'Не удалось отменить серию')),
   })
 
   const cancel = useMutation({
@@ -244,22 +278,69 @@ function SessionsTab({ venues, events }) {
   const submit = () => {
     if (!form.eventId) return toast.error('Выберите мероприятие')
     if (!form.hallId) return toast.error('Выберите зал')
+
+    const prices = PRICE_CATEGORIES.map(({ key }) => ({
+      category: key,
+      price: Number(form.prices[key]) || 0,
+    }))
+
+    if (form.mode === 'series') {
+      const problem = validateRule(form.rule)
+      if (problem) return toast.error(problem)
+      return add.mutate({
+        event_id: Number(form.eventId),
+        hall_id: Number(form.hallId),
+        is_recurring: true,
+        recurring: ruleToPayload(form.rule),
+        prices,
+      })
+    }
+
     if (!form.datetime) return toast.error('Укажите дату и время')
-    add.mutate({
+    return add.mutate({
       event_id: Number(form.eventId),
       hall_id: Number(form.hallId),
       datetime: new Date(form.datetime).toISOString(),
-      prices: PRICE_CATEGORIES.map(({ key }) => ({
-        category: key,
-        price: Number(form.prices[key]) || 0,
-      })),
+      prices,
     })
   }
+
+  const blocks = groupSessions(sessions)
 
   return (
     <div className="space-y-4">
       {form ? (
         <Panel className="space-y-4 p-4">
+          <div
+            role="radiogroup"
+            aria-label="Вид сеанса"
+            className="flex gap-1 rounded-[var(--radius-sm)] border border-[var(--border)] p-1"
+          >
+            {[
+              { key: 'single', label: 'Разовый сеанс' },
+              { key: 'series', label: 'Повторяющиеся сеансы' },
+            ].map((option) => {
+              const active = form.mode === option.key
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setForm({ ...form, mode: option.key })}
+                  className={[
+                    'flex-1 rounded-[6px] px-3 py-1.5 text-xs transition-all duration-150',
+                    active
+                      ? 'bg-[var(--accent)] font-medium text-[var(--bg)]'
+                      : 'text-[var(--muted)] hover:text-[var(--text)]',
+                  ].join(' ')}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
@@ -304,14 +385,23 @@ function SessionsTab({ venues, events }) {
                 }))}
               />
             </label>
-            <Input
-              label="Дата и время"
-              name="datetime"
-              type="datetime-local"
-              value={form.datetime}
-              onChange={(event) => setForm({ ...form, datetime: event.target.value })}
-            />
+            {form.mode !== 'series' && (
+              <Input
+                label="Дата и время"
+                name="datetime"
+                type="datetime-local"
+                value={form.datetime}
+                onChange={(event) => setForm({ ...form, datetime: event.target.value })}
+              />
+            )}
           </div>
+
+          {form.mode === 'series' && (
+            <RecurrenceEditor
+              value={form.rule}
+              onChange={(rule) => setForm({ ...form, rule })}
+            />
+          )}
 
           <div>
             <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
@@ -342,7 +432,7 @@ function SessionsTab({ venues, events }) {
               Отмена
             </Button>
             <Button loading={add.isPending} onClick={submit}>
-              Создать сеанс
+              {form.mode === 'series' ? 'Создать серию' : 'Создать сеанс'}
             </Button>
           </div>
         </Panel>
@@ -351,10 +441,12 @@ function SessionsTab({ venues, events }) {
           variant="ghost"
           onClick={() =>
             setForm({
+              mode: 'single',
               eventId: '',
               venueId: venues?.length === 1 ? String(venues[0].id) : '',
               hallId: '',
               datetime: '',
+              rule: emptyRule(),
               prices: { standard: 500, vip: 1500, balcony: 300 },
             })
           }
@@ -366,33 +458,80 @@ function SessionsTab({ venues, events }) {
 
       {isLoading ? (
         <Panel className="h-40 animate-pulse" />
-      ) : sessions?.length ? (
+      ) : blocks.length ? (
         <div className="space-y-2">
-          {sessions.map((session) => (
-            <Panel key={session.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm">{session.event_title}</p>
-                <p className="mt-0.5 text-xs text-[var(--muted2)]">
-                  {session.hall_name ?? 'Зал не указан'} · {formatDateTime(session.datetime)}
-                </p>
-              </div>
-              <span className="shrink-0 font-mono2 text-xs text-[var(--muted)]">
-                {session.seats_free} / {session.seats_total}
-              </span>
-              <Button
-                size="sm"
-                variant="danger"
-                loading={cancel.isPending}
-                onClick={() => {
-                  if (window.confirm(`Отменить сеанс «${session.event_title}»?`)) {
-                    cancel.mutate(session.id)
+          {blocks.map((block) =>
+            block.kind === 'single' ? (
+              <SessionRow
+                key={block.key}
+                session={block.sessions[0]}
+                busy={cancel.isPending}
+                onCancel={() => {
+                  if (window.confirm(`Отменить сеанс «${block.sessions[0].event_title}»?`)) {
+                    cancel.mutate(block.sessions[0].id)
                   }
                 }}
-              >
-                Отменить
-              </Button>
-            </Panel>
-          ))}
+              />
+            ) : (
+              <Panel key={block.key} className="overflow-hidden">
+                {/* One act of scheduling, so one heading and one way to undo it. */}
+                <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border)] bg-[var(--surface2)] px-4 py-2.5">
+                  <Repeat size={14} className="shrink-0 text-[var(--accent)]" />
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {block.sessions[0].event_title}
+                  </span>
+                  <span className="shrink-0 rounded-full border border-[var(--border2)] px-2.5 py-1 font-mono2 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Серия: {pluralize(block.sessions.length, 'сеанс', 'сеанса', 'сеансов')}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    loading={
+                      cancelSeries.isPending && cancelSeries.variables === block.groupId
+                    }
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Отменить все ${block.sessions.length} сеансов этой серии?`,
+                        )
+                      ) {
+                        cancelSeries.mutate(block.groupId)
+                      }
+                    }}
+                  >
+                    Отменить серию
+                  </Button>
+                </div>
+                <ul className="divide-y divide-[var(--border)]">
+                  {block.sessions.map((session) => (
+                    <li
+                      key={session.id}
+                      className="flex flex-wrap items-center gap-3 px-4 py-2.5"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-xs text-[var(--muted)]">
+                        {session.hall_name ?? 'Зал не указан'} ·{' '}
+                        {formatDateTime(session.datetime)}
+                      </span>
+                      <span className="shrink-0 font-mono2 text-xs text-[var(--muted)]">
+                        {session.seats_free} / {session.seats_total}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          if (window.confirm('Отменить этот сеанс серии?')) {
+                            cancel.mutate(session.id)
+                          }
+                        }}
+                      >
+                        Отменить
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </Panel>
+            ),
+          )}
         </div>
       ) : (
         <Panel>

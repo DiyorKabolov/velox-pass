@@ -28,6 +28,11 @@ COLUMNS = [
         "ALTER TABLE events ADD COLUMN tags VARCHAR(32)[]",
     ),
     (
+        "events",
+        "image_url",
+        "ALTER TABLE events ADD COLUMN image_url VARCHAR(512)",
+    ),
+    (
         "user_venue_roles",
         "created_at",
         "ALTER TABLE user_venue_roles ADD COLUMN created_at TIMESTAMPTZ",
@@ -37,6 +42,25 @@ COLUMNS = [
         "template_id",
         "ALTER TABLE events ADD COLUMN template_id INTEGER "
         "REFERENCES pdf_templates(id) ON DELETE SET NULL",
+    ),
+    (
+        "venues",
+        "description",
+        "ALTER TABLE venues ADD COLUMN description TEXT",
+    ),
+    (
+        "venues",
+        "image_url",
+        "ALTER TABLE venues ADD COLUMN image_url VARCHAR(512)",
+    ),
+    (
+        # The index comes with the column: a whole series is cancelled by this
+        # id, and without it that is a scan of every session ever scheduled.
+        "sessions",
+        "recurring_group_id",
+        "ALTER TABLE sessions ADD COLUMN recurring_group_id VARCHAR(36); "
+        "CREATE INDEX IF NOT EXISTS ix_sessions_recurring_group_id "
+        "ON sessions (recurring_group_id)",
     ),
 ]
 

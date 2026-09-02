@@ -26,6 +26,9 @@ class Event(Base):
     # the && operator straight off the column. Rows written before this column
     # existed hold NULL, which the schema normalises to an empty list.
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(String(32)), nullable=True)
+    # Path under /uploads, not an absolute URL: the site is reached through a
+    # tunnel whose host changes, and a stored host would rot on the next start.
+    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # NULL means "whichever template is marked default", resolved at render time
     # rather than copied here, so changing the default reaches every event.
     template_id: Mapped[int | None] = mapped_column(

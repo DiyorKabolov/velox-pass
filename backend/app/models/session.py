@@ -23,6 +23,12 @@ class Session(Base):
     datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # scheduled | on_sale | sold_out | cancelled | finished
     status: Mapped[str] = mapped_column(String(32), default="scheduled", nullable=False)
+    # Shared by every showing generated from one recurrence rule, so a
+    # series can be recognised in a list and cancelled in one go. Null for
+    # a session created on its own.
+    recurring_group_id: Mapped[str | None] = mapped_column(
+        String(36), index=True, nullable=True
+    )
 
     event = relationship("Event", back_populates="sessions")
     hall = relationship("Hall", back_populates="sessions")

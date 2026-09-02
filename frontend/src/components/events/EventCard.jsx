@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, CalendarDays, MapPin } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { formatDate, isExpired } from '../../utils/dates'
@@ -11,6 +11,53 @@ export const cardVariants = {
   hidden: { opacity: 0, y: 14 },
   show: { opacity: 1, y: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } },
 }
+
+/** #rrggbb plus two hex digits of alpha, for the gradients over the artwork. */
+const alpha = (hex, hexAlpha) => `${hex}${hexAlpha}`
+
+/**
+ * Veils that dissolve the artwork into the card.
+ *
+ * Two of them, because the copy runs down the left and along the bottom: the
+ * first keeps the left side solid card colour and lets the picture surface
+ * towards the right, the second does the same upwards from the foot so the
+ * seat counter and the progress bar stay legible. Both fade to the card's own
+ * background rather than to black -- the card is light, and a dark scrim would
+ * fight the dark text sitting on it.
+ */
+const veils = (bg) => [
+  `linear-gradient(100deg, ${bg} 0%, ${bg} 38%, ${alpha(bg, 'd9')} 54%, ${alpha(bg, '00')} 92%)`,
+  `linear-gradient(to top, ${bg} 6%, ${alpha(bg, 'b3')} 26%, ${alpha(bg, '00')} 52%)`,
+]
+
+/**
+ * The veils above leave only the card's top-right corner clear, so that corner
+ * is the whole of what anyone actually sees of the artwork -- and centred, the
+ * picture offers it nothing but its right edge. Pushing the picture up and to
+ * the right puts the middle of the photo in the one place the photo shows.
+ *
+ * The zoom is what makes the shift safe rather than a hole in the corner:
+ * enlarged, the artwork overhangs the card by (ART_ZOOM - 1) / 2 on every side,
+ * so any offset below that still covers the card edge to edge. Both offsets
+ * here sit under that limit (35%), with the tighter margin on x.
+ */
+const ART_ZOOM = 1.7
+const ART_TRANSFORM = `translate(30%, -22%) scale(${ART_ZOOM})`
+
+/**
+ * The backdrop for an event that has no artwork yet.
+ *
+ * Flat colour would make such a card read as a different, poorer object than
+ * its neighbours, so the event's own accent is bloomed into the very corner the
+ * photo would have filled, then allowed to fade into the card. Same shape, same
+ * weight, no picture -- and each event keeps its own colour, because the bloom
+ * is mixed from the accent the card already carries.
+ */
+const plainBackdrop = (accent) =>
+  [
+    `radial-gradient(115% 85% at 82% 18%, ${alpha(accent, '59')} 0%, ${alpha(accent, '26')} 38%, ${alpha(accent, '00')} 72%)`,
+    `linear-gradient(155deg, ${alpha(accent, '1f')} 0%, ${alpha(accent, '00')} 58%)`,
+  ].join(', ')
 
 export default function EventCard({ event }) {
   const colors = getCardColors(event)
@@ -36,77 +83,102 @@ export default function EventCard({ event }) {
     ? event.has_active_session === false || (total > 0 && available <= 0)
     : total > 0 && sold >= total
 
+  const status = past ? 'Завершено' : soldOut ? 'Мест нет' : 'В продаже'
+
   return (
     <motion.div
       variants={cardVariants}
-      whileHover={{ y: -5 }}
+      whileHover={{ y: -3 }}
       whileTap={{ scale: 0.985 }}
       transition={{ type: 'spring', stiffness: 380, damping: 26 }}
-      className="w-full max-w-[320px]"
+      className="group flex w-full max-w-[340px]"
     >
       <Link
         to={`/event/${event.id}`}
-        className="group block overflow-hidden rounded-[var(--radius)] shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition-shadow duration-300 hover:shadow-[0_14px_36px_rgba(0,0,0,0.45)]"
-        style={{ background: colors.bg, color: colors.text }}
+        className="relative flex w-full flex-col overflow-hidden rounded-[16px] shadow-[0_8px_32px_rgba(0,0,0,0.3)] transition-shadow duration-200 hover:shadow-[0_16px_48px_rgba(0,0,0,0.4)]"
+        style={{ background: colors.bg, color: colors.text, minHeight: 190 }}
       >
-        <div className="h-1.5 w-full" style={{ background: colors.accent }} />
-
-        {/* Fixed so every card in the row is the same height, and sized for the
-            tallest combination -- a two-line title plus a row of tags, 244.5px
-            of content in 20px padding. At the old 210px a two-line title alone
-            already overflowed by 7.5px; the flex children then shrank below
-            their own line height and the text ran over itself. */}
-        <div className="flex h-[252px] flex-col p-5">
+        {event.image_url ? (
+          <>
+            {/* The shift lives on a wrapper so the hover zoom, which is the
+                image's own transform, does not overwrite it. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{ transform: ART_TRANSFORM }}
+            >
+              <img
+                src={event.image_url}
+                alt=""
+                loading="lazy"
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+            </span>
+            {veils(colors.bg).map((veil) => (
+              <span
+                key={veil}
+                aria-hidden
+                className="pointer-events-none absolute inset-0"
+                style={{ background: veil }}
+              />
+            ))}
+          </>
+        ) : (
           <span
-            className="mb-2 shrink-0 font-mono2 text-[10px] uppercase tracking-[0.14em]"
-            style={{ color: colors.accent }}
-          >
-            {past ? 'Завершено' : soldOut ? 'Мест нет' : 'В продаже'}
-          </span>
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ background: plainBackdrop(colors.accent) }}
+          />
+        )}
 
-          <h3 className="shrink-0 font-display text-lg leading-snug line-clamp-2">
+        {/* Above the artwork, and drawn last so nothing veils it. */}
+        <div
+          className="absolute left-0 right-0 top-0 h-[3px]"
+          style={{ background: colors.accent, zIndex: 2 }}
+        />
+
+        <div className="relative z-[1] flex min-w-0 flex-1 flex-col p-5 pb-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className="rounded-full px-2 py-0.5 font-mono2 text-[9px] uppercase tracking-[0.12em]"
+              style={{ background: alpha(colors.accent, '2e'), color: colors.text }}
+            >
+              {status}
+            </span>
+            {tags.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                style={{ background: alpha(tagColor(tag), '33'), color: colors.text }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+
+          <h3 className="mt-2 line-clamp-2 font-display text-[16px] font-semibold leading-snug">
             {event.title}
           </h3>
 
-          {tags.length > 0 && (
-            // One row, never two: the card's height is fixed, so a wrapping
-            // second row of tags would push the rest of the content out of it.
-            // Anything past the first two is counted instead, and the full set
-            // is on the event page.
-            <div className="mt-2 flex shrink-0 flex-nowrap gap-1">
-              {tags.slice(0, 2).map((tag) => (
-                <span
-                  key={tag}
-                  className="truncate rounded-full px-2 py-0.5 text-[10px] font-medium"
-                  style={{ background: `${tagColor(tag)}33`, color: colors.text }}
-                >
-                  {tag}
-                </span>
-              ))}
-              {tags.length > 2 && (
-                <span
-                  className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium opacity-60"
-                  style={{ background: `${colors.accent}22` }}
-                >
-                  +{tags.length - 2}
-                </span>
-              )}
-            </div>
-          )}
-
-          <p className="mt-2 shrink-0 text-sm opacity-70">{formatDate(event.date)}</p>
+          <p className="mt-2 flex items-center gap-1.5 text-xs opacity-70">
+            <CalendarDays size={13} className="shrink-0" />
+            <span className="truncate">{formatDate(event.date)}</span>
+          </p>
           {event.location && (
-            <p className="mt-0.5 shrink-0 truncate text-sm opacity-55">{event.location}</p>
+            <p className="mt-1 flex items-center gap-1.5 text-xs opacity-70">
+              <MapPin size={13} className="shrink-0" />
+              <span className="truncate">{event.location}</span>
+            </p>
           )}
 
-          <div className="mt-auto">
+          <div className="mt-auto pt-3">
             {total > 0 && (
-              <div className="mb-3">
+              <div className="mb-2.5">
                 <div className="mb-1 flex justify-between font-mono2 text-[10px] opacity-60">
-                  <span>
+                  <span className="truncate">
                     {pluralize(available, 'место', 'места', 'мест')} свободно
                   </span>
-                  <span>{fillPercent}%</span>
+                  <span className="shrink-0">{fillPercent}%</span>
                 </div>
                 <div
                   className="h-1 w-full overflow-hidden rounded-full"
@@ -124,16 +196,16 @@ export default function EventCard({ event }) {
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium opacity-80 transition-opacity duration-200 group-hover:opacity-100">
-                Подробнее
-              </span>
+            <span
+              className="inline-flex items-center gap-1 text-xs font-medium"
+              style={{ color: colors.accent }}
+            >
+              Подробнее
               <ArrowRight
-                size={18}
-                className="transition-transform duration-300 group-hover:translate-x-1.5"
-                style={{ color: colors.accent }}
+                size={13}
+                className="transition-transform duration-300 group-hover:translate-x-1"
               />
-            </div>
+            </span>
           </div>
         </div>
       </Link>

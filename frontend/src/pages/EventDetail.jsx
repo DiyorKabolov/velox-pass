@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Armchair, CalendarDays, MapPin, Users } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { getEventSessions } from '../api/events'
 import { useEvent } from '../hooks/useEvents'
@@ -21,6 +21,13 @@ export default function EventDetail() {
   const { data: event, isLoading, isError } = useEvent(id)
   const buy = useBuyTicket()
 
+  // A venue's schedule links straight to one showing. Marked and scrolled to
+  // rather than opened: opening the seat picker would bounce a signed-out
+  // visitor to the login page the moment they arrived from the timetable.
+  const [searchParams] = useSearchParams()
+  const highlighted = Number(searchParams.get('session')) || null
+  const highlightRef = useRef(null)
+
   const [pickingSession, setPickingSession] = useState(null)
 
   // Only seated events have showings to choose from.
@@ -29,6 +36,10 @@ export default function EventDetail() {
     queryFn: () => getEventSessions(id),
     enabled: Boolean(event?.has_seats),
   })
+
+  useEffect(() => {
+    highlightRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [highlighted, sessions])
 
   if (isLoading) {
     return (
@@ -181,11 +192,20 @@ export default function EventDetail() {
                     sessions.map((session) => (
                       <button
                         key={session.id}
+                        ref={session.id === highlighted ? highlightRef : null}
                         type="button"
                         disabled={past || session.seats_free === 0}
                         onClick={() => openSeatPicker(session)}
-                        className="flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-left text-sm transition-all duration-150 hover:brightness-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
-                        style={{ background: withAlpha(colors.accent, 0.16) }}
+                        className={[
+                          'flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-left text-sm transition-all duration-150 hover:brightness-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45',
+                          session.id === highlighted ? 'ring-2 ring-offset-1' : '',
+                        ].join(' ')}
+                        style={{
+                          background: withAlpha(colors.accent, 0.16),
+                          ...(session.id === highlighted
+                            ? { '--tw-ring-color': colors.accent, '--tw-ring-offset-color': colors.bg }
+                            : {}),
+                        }}
                       >
                         <span>
                           <span className="block font-medium">

@@ -4,6 +4,7 @@ import {
   Camera,
   LayoutDashboard,
   LogOut,
+  Store,
   Ticket,
   User,
 } from 'lucide-react'
@@ -81,6 +82,10 @@ export default function Navbar() {
             Афиша
           </NavItem>
 
+          <NavItem to="/venues" icon={Building2}>
+            Площадки
+          </NavItem>
+
           {isAuthenticated && (
             <NavItem to="/cabinet" icon={Ticket}>
               Мои билеты
@@ -93,8 +98,10 @@ export default function Navbar() {
             </NavItem>
           )}
 
+          {/* Building2 is taken by the public catalogue above, so the
+              administrator's own venue gets its own icon. */}
           {isVenueAdmin && (
-            <NavItem to="/venue-admin" icon={Building2}>
+            <NavItem to="/venue-admin" icon={Store}>
               Моя площадка
             </NavItem>
           )}

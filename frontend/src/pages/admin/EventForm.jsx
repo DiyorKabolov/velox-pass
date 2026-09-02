@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { createEvent } from '../../api/events'
+import { createEvent, uploadEventImage } from '../../api/events'
 import { setEventTemplate } from '../../api/pdfTemplates'
 import { apiError } from '../../api/client'
 import Button from '../../components/ui/Button'
@@ -31,8 +31,9 @@ export default function EventForm() {
   const create = useMutation({
     mutationFn: async (payload) => {
       const event = await createEvent(payload)
-      // Only possible after the event exists, since the choice is keyed by id.
+      // Both of these are keyed by id, so they can only run once it exists.
       if (form.template_id) await setEventTemplate(event.id, form.template_id)
+      if (form.image_file) await uploadEventImage(event.id, form.image_file)
       return event
     },
     onSuccess: (event) => {

@@ -10,6 +10,8 @@ import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 import Register from './pages/Register'
 import Scanner from './pages/Scanner'
+import Venues from './pages/Venues'
+import VenuePage from './pages/VenuePage'
 import VenueAdminPanel from './pages/VenueAdminPanel'
 import Dashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
@@ -91,6 +93,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/event/:id" element={<EventDetail />} />
+          <Route path="/venues" element={<Venues />} />
+          <Route path="/venues/:id" element={<VenuePage />} />
 
           <Route
             path="/login"

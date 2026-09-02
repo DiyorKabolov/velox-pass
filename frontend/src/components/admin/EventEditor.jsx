@@ -5,6 +5,7 @@ import Input from '../ui/Input'
 import Select from '../ui/Select'
 import { getPreviewImage, getTemplates } from '../../api/pdfTemplates'
 import { EVENT_TAGS, tagColor } from '../../utils/eventTags'
+import EventImageUpload from './EventImageUpload'
 import ColorField from './ColorField'
 import EventPreview from './EventPreview'
 import { COLOR_PRESETS, DEFAULT_COLORS } from './eventForm'
@@ -220,6 +221,21 @@ export default function EventEditor({ form, onChange }) {
       </div>
 
       <div className="min-w-0">
+        <div className="mb-6">
+          <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+            Обложка
+          </span>
+          <EventImageUpload
+            value={form.image_url}
+            file={form.image_file}
+            onPick={(image_file) => set({ image_file })}
+            onRemove={() => set({ image_file: null, image_url: null })}
+          />
+          <p className="mt-2 text-xs text-[var(--muted2)]">
+            Появится кружком на карточке в афише.
+          </p>
+        </div>
+
         <div className="mb-6">
           <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
             PDF шаблон
