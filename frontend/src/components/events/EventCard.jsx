@@ -177,6 +177,11 @@ export default function EventCard({ event }) {
                 <div className="mb-1 flex justify-between font-mono2 text-[10px] opacity-60">
                   <span className="truncate">
                     {pluralize(available, 'место', 'места', 'мест')} свободно
+                    {/* A seated event spreads its seats over showings, so the
+                        number above is a total and means little without them. */}
+                    {event.has_seats && event.sessions_count > 0 && (
+                      <> ({pluralize(event.sessions_count, 'сеанс', 'сеанса', 'сеансов')})</>
+                    )}
                   </span>
                   <span className="shrink-0">{fillPercent}%</span>
                 </div>

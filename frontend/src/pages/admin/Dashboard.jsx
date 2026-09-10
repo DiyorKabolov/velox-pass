@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { CalendarDays, CheckCircle2, Ticket, Users, Wallet } from 'lucide-react'
 import { getAdminEvents, getStats } from '../../api/admin'
 import { formatShortDate } from '../../utils/dates'
+import { capacityLabel, sessionsLabel } from '../../utils/capacity'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
 function StatCard({ icon: Icon, label, value }) {
@@ -72,7 +73,14 @@ export default function Dashboard() {
               </Td>
               <Td className="text-[var(--muted)]">{event.location || '—'}</Td>
               <Td className="text-right font-mono2 text-xs">
-                {event.tickets_sold} / {event.capacity || '∞'}
+                {capacityLabel(event)}
+                {/* A seated event's capacity is the sum over its showings, so
+                    the pair above only makes sense with their number. */}
+                {event.has_seats && sessionsLabel(event) && (
+                  <span className="ml-1.5 text-[10px] text-[var(--muted2)]">
+                    ({sessionsLabel(event)})
+                  </span>
+                )}
               </Td>
             </tr>
           ))}

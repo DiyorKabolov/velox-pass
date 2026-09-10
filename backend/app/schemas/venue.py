@@ -34,6 +34,10 @@ class VenueOut(BaseModel):
     # listing endpoints; zero elsewhere rather than absent, so the public cards
     # never have to guard against a missing field.
     active_events_count: int = 0
+    # When the next showing here starts. On the card it is a line of its own, so
+    # it has to be known before anything is hovered -- which is why it travels
+    # with the venue rather than with the schedule.
+    next_session_at: datetime | None = None
 
 
 class HallCreate(BaseModel):

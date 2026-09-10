@@ -8,10 +8,11 @@ import { useEvent } from '../hooks/useEvents'
 import SeatBookingModal from '../components/seats/SeatBookingModal'
 import { useBuyTicket } from '../hooks/useTickets'
 import useAuth from '../hooks/useAuth'
-import { formatDate, formatDateTime, isExpired } from '../utils/dates'
-import { getCardColors, withAlpha } from '../utils/colors'
+import { formatDate, formatSessionStamp, isExpired } from '../utils/dates'
+import { getCardColors } from '../utils/colors'
 import { orderTags, tagColor } from '../utils/eventTags'
 import { pluralize } from '../utils/plural'
+import SessionPicker from '../components/events/SessionPicker'
 import Button from '../components/ui/Button'
 
 export default function EventDetail() {
@@ -89,6 +90,10 @@ export default function EventDetail() {
     if (requireSignIn()) return
     buy.mutate({ eventId: event.id }, { onSuccess: () => navigate('/cabinet') })
   }
+
+  // Exactly one showing, which needs no picking. Null whenever there is a
+  // choice to make or nothing to choose from.
+  const onlySession = sessions?.length === 1 ? sessions[0] : null
 
   const openSeatPicker = (session) => {
     if (requireSignIn()) return
@@ -184,45 +189,63 @@ export default function EventDetail() {
               />
 
               {event.has_seats ? (
-                <div className="space-y-2">
+                <div>
                   <p className="mb-3 text-xs uppercase tracking-[0.12em] opacity-55">
-                    Сеансы
+                    {onlySession ? 'Сеанс' : 'Выберите сеанс'}
                   </p>
-                  {sessions?.length ? (
-                    sessions.map((session) => (
-                      <button
-                        key={session.id}
-                        ref={session.id === highlighted ? highlightRef : null}
-                        type="button"
-                        disabled={past || session.seats_free === 0}
-                        onClick={() => openSeatPicker(session)}
-                        className={[
-                          'flex w-full items-center justify-between gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-left text-sm transition-all duration-150 hover:brightness-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45',
-                          session.id === highlighted ? 'ring-2 ring-offset-1' : '',
-                        ].join(' ')}
+
+                  {!sessions?.length && (
+                    <p className="text-sm opacity-55">Сеансы пока не назначены.</p>
+                  )}
+
+                  {/* One showing is not a choice: naming it and offering the
+                      seat map directly saves a click that only ever has one
+                      answer. */}
+                  {onlySession && (
+                    <>
+                      <p className="font-medium">
+                        {formatSessionStamp(onlySession.datetime)}
+                      </p>
+                      {onlySession.hall_name && (
+                        <p className="mt-0.5 text-xs opacity-60">
+                          {onlySession.hall_name}
+                        </p>
+                      )}
+                      <p className="mt-1 flex items-center gap-1.5 text-xs opacity-70">
+                        <Armchair size={13} />
+                        {onlySession.seats_free > 0
+                          ? `${pluralize(onlySession.seats_free, 'место', 'места', 'мест')} свободно`
+                          : 'Мест нет'}
+                      </p>
+                      <Button
+                        onClick={() => openSeatPicker(onlySession)}
+                        disabled={past || onlySession.seats_free <= 0}
+                        className="mt-4 w-full"
                         style={{
-                          background: withAlpha(colors.accent, 0.16),
-                          ...(session.id === highlighted
-                            ? { '--tw-ring-color': colors.accent, '--tw-ring-offset-color': colors.bg }
-                            : {}),
+                          background: colors.accent,
+                          borderColor: colors.accent,
+                          color: colors.bg,
                         }}
                       >
-                        <span>
-                          <span className="block font-medium">
-                            {formatDateTime(session.datetime)}
-                          </span>
-                          {session.hall_name && (
-                            <span className="text-xs opacity-60">{session.hall_name}</span>
-                          )}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1.5 font-mono2 text-xs opacity-70">
-                          <Armchair size={13} />
-                          {session.seats_free}
-                        </span>
-                      </button>
-                    ))
-                  ) : (
-                    <p className="text-sm opacity-55">Сеансы пока не назначены.</p>
+                        {past
+                          ? 'Мероприятие завершено'
+                          : onlySession.seats_free <= 0
+                            ? 'Мест нет'
+                            : 'Выбрать места'}
+                      </Button>
+                    </>
+                  )}
+
+                  {sessions?.length > 1 && (
+                    <SessionPicker
+                      sessions={sessions}
+                      colors={colors}
+                      disabled={past}
+                      selectedId={pickingSession?.id ?? null}
+                      highlightedId={highlighted}
+                      highlightRef={highlightRef}
+                      onSelect={openSeatPicker}
+                    />
                   )}
                 </div>
               ) : (

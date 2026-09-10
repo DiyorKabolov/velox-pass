@@ -78,6 +78,9 @@ class EventOut(BaseModel):
     total_seats: int = 0
     available_seats: int = 0
     has_active_session: bool = False
+    # How many live showings those seats are spread over. 0 for an unseated
+    # event, which has no showings at all.
+    sessions_count: int = 0
 
     @field_validator("tags", mode="before")
     @classmethod

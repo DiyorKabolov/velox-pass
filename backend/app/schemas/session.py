@@ -143,6 +143,12 @@ class SessionOut(BaseModel):
     seats_total: int = 0
     seats_taken: int = 0
     seats_free: int = 0
+    # The cheapest category on sale for this showing, so a listing can say
+    # "from X" without pulling the whole price table.
+    min_price: float | None = None
+    # active | finished | cancelled -- the stored status folded together with
+    # the clock, because "scheduled" says nothing about a showing that is over.
+    state: str = "active"
     prices: list[SeatPriceOut] = []
 
 

@@ -148,3 +148,37 @@ export function dayKey(value) {
   if (!date) return ''
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
+
+/** "сегодня 19:30", "завтра 19:30", "5 сен 19:30".
+ *
+ *  The compact form, for a line that has to sit beside everything else on a
+ *  card rather than head a section the way formatDayLabel does.
+ */
+export function formatWhenShort(value) {
+  const date = toDate(value)
+  if (!date) return '—'
+
+  const midnight = new Date()
+  midnight.setHours(0, 0, 0, 0)
+  const days = Math.round((startOfDay(date) - midnight) / 86_400_000)
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+
+  if (days === 0) return `сегодня ${time}`
+  if (days === 1) return `завтра ${time}`
+  return `${date.getDate()} ${MONTHS_SHORT[date.getMonth()]} ${time}`
+}
+
+/** "Пт, 5 сен · 19:30" — one showing, dense enough for a table cell. */
+export function formatSessionStamp(value) {
+  const date = toDate(value)
+  if (!date) return '—'
+  const day = `${WEEKDAYS_SHORT[date.getDay()]}, ${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`
+  return `${day} · ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** "Пятница, 5 сентября" — a heading over the showings of one day. */
+export function formatDayHeading(value) {
+  const date = toDate(value)
+  if (!date) return '—'
+  return `${WEEKDAYS[date.getDay()]}, ${date.getDate()} ${MONTHS[date.getMonth()]}`
+}

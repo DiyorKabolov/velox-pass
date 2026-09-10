@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { getAdminEvents } from '../../api/admin'
@@ -13,9 +13,11 @@ import {
 import { setEventTemplate } from '../../api/pdfTemplates'
 import { apiError } from '../../api/client'
 import { formatShortDate } from '../../utils/dates'
+import { availableLabel, capacityLabel, sessionsLabel } from '../../utils/capacity'
 import Button from '../../components/ui/Button'
 import Modal from '../../components/ui/Modal'
 import EventEditor from '../../components/admin/EventEditor'
+import EventSessions from '../../components/admin/EventSessions'
 import { toFormValue, toPayload, validate } from '../../components/admin/eventForm'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
@@ -30,6 +32,16 @@ export default function Events() {
 
   // null = closed. Otherwise { id, form } for the event being edited.
   const [editing, setEditing] = useState(null)
+  // Ids of the rows showing their sessions. A set rather than a single id, so
+  // two events can be compared side by side.
+  const [expanded, setExpanded] = useState(() => new Set())
+
+  const toggle = (eventId) =>
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (!next.delete(eventId)) next.add(eventId)
+      return next
+    })
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'events'] })
@@ -102,67 +114,109 @@ export default function Events() {
         <TableShell>
           <thead>
             <tr>
+              <Th className="w-8" />
               <Th>Название</Th>
               <Th>Дата</Th>
               <Th>Место</Th>
-              <Th className="text-right">Вместимость</Th>
-              <Th className="text-right">Продано</Th>
+              <Th className="text-right">Продано / всего</Th>
+              <Th className="text-right">Свободно</Th>
               <Th className="text-right">Действия</Th>
             </tr>
           </thead>
           <tbody>
-            {events?.map((event) => (
-              <tr key={event.id} className="transition-colors hover:bg-[var(--surface)]">
-                <Td>
-                  <span className="flex items-center gap-2">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ background: event.card_accent }}
-                    />
-                    {event.title}
-                  </span>
-                </Td>
-                <Td className="font-mono2 text-xs text-[var(--muted)]">
-                  {formatShortDate(event.date)}
-                </Td>
-                <Td className="text-[var(--muted)]">{event.location || '—'}</Td>
-                <Td className="text-right font-mono2 text-xs">{event.capacity || '∞'}</Td>
-                <Td className="text-right font-mono2 text-xs">{event.tickets_sold}</Td>
-                <Td>
-                  <div className="flex justify-end gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Редактировать ${event.title}`}
-                      onClick={() =>
-                        // The untouched event is kept alongside the form so the
-                        // save can tell a removed picture from one that was
-                        // never there.
-                        setEditing({
-                          id: event.id,
-                          original: event,
-                          form: toFormValue(event),
-                        })
-                      }
-                    >
-                      <Pencil size={13} />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      aria-label={`Удалить ${event.title}`}
-                      loading={remove.isPending && remove.variables === event.id}
-                      onClick={() => handleDelete(event)}
-                    >
-                      <Trash2 size={13} />
-                    </Button>
-                  </div>
-                </Td>
-              </tr>
-            ))}
+            {events?.map((event) => {
+              const open = expanded.has(event.id)
+              return (
+                <Fragment key={event.id}>
+                  <tr className="transition-colors hover:bg-[var(--surface)]">
+                    <Td className="pr-0">
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        aria-label={`Сеансы: ${event.title}`}
+                        onClick={() => toggle(event.id)}
+                        className="flex h-6 w-6 items-center justify-center rounded text-[var(--muted)] transition-colors hover:bg-[var(--surface2)] hover:text-[var(--text)]"
+                      >
+                        <ChevronRight
+                          size={14}
+                          className={`transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+                        />
+                      </button>
+                    </Td>
+                    <Td>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ background: event.card_accent }}
+                        />
+                        {event.title}
+                      </span>
+                    </Td>
+                    <Td className="font-mono2 text-xs text-[var(--muted)]">
+                      {formatShortDate(event.date)}
+                    </Td>
+                    <Td className="text-[var(--muted)]">{event.location || '—'}</Td>
+                    <Td className="text-right font-mono2 text-xs whitespace-nowrap">
+                      {capacityLabel(event)}
+                      {/* Seated events keep no capacity of their own; it is the sum
+                          over their showings, which is worth stating. */}
+                      {event.has_seats && sessionsLabel(event) && (
+                        <span className="ml-1.5 text-[10px] text-[var(--muted2)]">
+                          ({sessionsLabel(event)})
+                        </span>
+                      )}
+                    </Td>
+                    <Td className="text-right font-mono2 text-xs">
+                      {availableLabel(event)}
+                    </Td>
+                    <Td>
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          aria-label={`Редактировать ${event.title}`}
+                          onClick={() =>
+                            // The untouched event is kept alongside the form so the
+                            // save can tell a removed picture from one that was
+                            // never there.
+                            setEditing({
+                              id: event.id,
+                              original: event,
+                              form: toFormValue(event),
+                            })
+                          }
+                        >
+                          <Pencil size={13} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          aria-label={`Удалить ${event.title}`}
+                          loading={remove.isPending && remove.variables === event.id}
+                          onClick={() => handleDelete(event)}
+                        >
+                          <Trash2 size={13} />
+                        </Button>
+                      </div>
+                    </Td>
+                  </tr>
+
+                  {open && (
+                    <tr>
+                      {/* One cell across the whole table rather than a row that
+                          tries to line up with the columns above: the breakdown has
+                          columns of its own and would not fit theirs. */}
+                      <Td colSpan={7} className="bg-[var(--bg)] p-3">
+                        <EventSessions eventId={event.id} />
+                      </Td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
             {events?.length === 0 && (
               <tr>
-                <Td className="text-center text-[var(--muted)]" colSpan={6}>
+                <Td className="text-center text-[var(--muted)]" colSpan={7}>
                   Мероприятий пока нет — создайте первое.
                 </Td>
               </tr>

@@ -161,34 +161,45 @@ async def create_venue(
 # returns every venue.
 
 
-async def _upcoming_event_counts(db: AsyncSession) -> dict[int, int]:
-    """Distinct events per venue that still have a showing to come.
+async def _upcoming_by_venue(db: AsyncSession) -> dict[int, tuple[int, datetime]]:
+    """Per venue: how many distinct events still have a showing, and when the
+    next one starts.
 
-    Counted through both links a showing can reach a venue by: the hall it runs
+    Gathered through both links a showing can reach a venue by: the hall it runs
     in, and the event's own venue_id for the events that carry one. The venue
-    schedule below matches on exactly the same pair, so the number on the card
+    schedule below matches on exactly the same pair, so the numbers on the card
     and the schedule behind it cannot disagree.
+
+    Both facts come out of the same two queries because they are the same scan;
+    asking twice would only cost another round trip.
     """
     now = datetime.now(timezone.utc)
     live = (Session.datetime > now, Session.status != "cancelled")
 
     by_hall = await db.execute(
-        select(Hall.venue_id, Session.event_id)
+        select(Hall.venue_id, Session.event_id, Session.datetime)
         .select_from(Session)
         .join(Hall, Hall.id == Session.hall_id)
         .where(*live)
     )
     by_event = await db.execute(
-        select(Event.venue_id, Session.event_id)
+        select(Event.venue_id, Session.event_id, Session.datetime)
         .select_from(Session)
         .join(Event, Event.id == Session.event_id)
         .where(*live, Event.venue_id.is_not(None))
     )
 
     events: dict[int, set[int]] = defaultdict(set)
-    for venue_id, event_id in list(by_hall.all()) + list(by_event.all()):
+    soonest: dict[int, datetime] = {}
+    for venue_id, event_id, moment in list(by_hall.all()) + list(by_event.all()):
         events[venue_id].add(event_id)
-    return {venue_id: len(ids) for venue_id, ids in events.items()}
+        if venue_id not in soonest or moment < soonest[venue_id]:
+            soonest[venue_id] = moment
+
+    return {
+        venue_id: (len(ids), soonest.get(venue_id))
+        for venue_id, ids in events.items()
+    }
 
 
 @router.get("/public", response_model=list[VenueOut])
@@ -203,13 +214,15 @@ async def list_public_venues(db: AsyncSession = Depends(get_db)):
             )
         ).all()
     )
-    events = await _upcoming_event_counts(db)
+    upcoming = await _upcoming_by_venue(db)
 
     payload = []
     for venue in venues:
+        count, next_at = upcoming.get(venue.id, (0, None))
         item = VenueOut.model_validate(venue)
         item.halls_count = halls.get(venue.id, 0)
-        item.active_events_count = events.get(venue.id, 0)
+        item.active_events_count = count
+        item.next_session_at = next_at
         payload.append(item)
     return payload
 
@@ -225,7 +238,9 @@ async def get_public_venue(venue_id: int, db: AsyncSession = Depends(get_db)):
     item.halls_count = await db.scalar(
         select(func.count(Hall.id)).where(Hall.venue_id == venue_id)
     )
-    item.active_events_count = (await _upcoming_event_counts(db)).get(venue_id, 0)
+    count, next_at = (await _upcoming_by_venue(db)).get(venue_id, (0, None))
+    item.active_events_count = count
+    item.next_session_at = next_at
     return item
 
 

@@ -27,6 +27,7 @@ from app.schemas.user import (
     VenueStaffOut,
 )
 from app.services import ticket_service
+from app.services.event_stats import serialize_events
 
 router = APIRouter(
     prefix="/admin", tags=["admin"], dependencies=[Depends(require_superadmin)]
@@ -52,18 +53,14 @@ async def stats(db: AsyncSession = Depends(get_db)):
 
 @router.get("/events", response_model=list[EventOut])
 async def admin_events(db: AsyncSession = Depends(get_db)):
+    """Every event, newest first, with the capacity it actually has.
+
+    Shares the serializer with the public listing. Counting here separately is
+    what put "∞" in the admin tables: a seated event stores capacity 0, because
+    its seats live on the halls its showings run in.
+    """
     result = await db.execute(select(Event).order_by(Event.date.desc()))
-    events = list(result.scalars().all())
-    payload = []
-    for event in events:
-        sold = await db.scalar(
-            select(func.count(Ticket.id)).where(Ticket.event_id == event.id)
-        )
-        item = EventOut.model_validate(event)
-        item.tickets_sold = sold or 0
-        item.seats_left = max(event.capacity - (sold or 0), 0) if event.capacity else 0
-        payload.append(item)
-    return payload
+    return await serialize_events(db, list(result.scalars().all()))
 
 
 @router.post("/events", response_model=EventOut, status_code=201)

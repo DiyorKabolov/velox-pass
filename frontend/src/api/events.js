@@ -48,8 +48,18 @@ export async function deleteEventImage(eventId) {
   return data
 }
 
-/** Showings of one event, soonest first. Cancelled ones are excluded. */
-export async function getEventSessions(eventId) {
-  const { data } = await client.get(`/events/${eventId}/sessions`)
+/**
+ * Showings of one event, soonest first, each with its own seat counts and
+ * cheapest price.
+ *
+ * By default only what can still be sold. `includeInactive` adds the cancelled
+ * and finished ones, which the admin breakdown needs; tell them apart by
+ * `state` ("active" | "finished" | "cancelled") rather than by the raw
+ * `status`, which says nothing about the clock.
+ */
+export async function getEventSessions(eventId, { includeInactive = false } = {}) {
+  const { data } = await client.get(`/events/${eventId}/sessions`, {
+    params: includeInactive ? { include_inactive: true } : undefined,
+  })
   return data
 }
