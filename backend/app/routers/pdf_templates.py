@@ -65,7 +65,7 @@ async def _clear_other_defaults(db: AsyncSession, keep_id: int) -> None:
 async def upload_template(
     file: UploadFile = File(...),
     name: str = Form(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     if not name.strip():
         raise HTTPException(status_code=400, detail="Укажите название шаблона")
@@ -117,13 +117,13 @@ async def upload_template(
 
 
 @router.get("", response_model=list[PdfTemplateOut])
-async def list_templates(db: AsyncSession = Depends(get_db)):
+async def list_templates(db: AsyncSession = Depends(get_db, scope="function")):
     result = await db.execute(select(PdfTemplate).order_by(PdfTemplate.created_at.desc()))
     return [_out(template) for template in result.scalars().all()]
 
 
 @router.get("/{template_id}", response_model=PdfTemplateOut)
-async def get_template(template_id: int, db: AsyncSession = Depends(get_db)):
+async def get_template(template_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     return _out(await _get(db, template_id))
 
 
@@ -131,7 +131,7 @@ async def get_template(template_id: int, db: AsyncSession = Depends(get_db)):
 async def update_template(
     template_id: int,
     data: PdfTemplateUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     template = await _get(db, template_id)
     fields = data.model_dump(exclude_unset=True)
@@ -158,7 +158,7 @@ async def update_template(
 
 
 @router.delete("/{template_id}", status_code=204)
-async def delete_template(template_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_template(template_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     template = await _get(db, template_id)
     path = _abs_path(template)
 
@@ -177,7 +177,7 @@ async def delete_template(template_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{template_id}/preview-image")
-async def preview_image(template_id: int, db: AsyncSession = Depends(get_db)):
+async def preview_image(template_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     template = await _get(db, template_id)
     source = _abs_path(template)
     if not os.path.isfile(source):
@@ -223,7 +223,7 @@ event_router = APIRouter(
 async def set_event_template(
     event_id: int,
     data: EventTemplateUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     event = await db.get(Event, event_id)
     if not event:

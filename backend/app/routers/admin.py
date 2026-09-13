@@ -1,4 +1,7 @@
-"""Superadmin-only management endpoints."""
+"""Superadmin-only management endpoints.
+
+Events, their covers and the dashboard counters live in staff_events.py,
+where venue administrators can reach them for their own venues."""
 import os
 import uuid
 
@@ -15,7 +18,6 @@ from app.models.user_venue_role import UserVenueRole
 from app.models.venue import Venue
 from app.models.ticket import Ticket
 from app.models.user import User
-from app.schemas.event import EventCreate, EventOut, EventUpdate
 from app.schemas.ticket import TicketOut
 from app.schemas.venue import VenueOut
 from app.schemas.user import (
@@ -27,75 +29,15 @@ from app.schemas.user import (
     VenueStaffOut,
 )
 from app.services import ticket_service
-from app.services.event_stats import serialize_events
+from app.services.uploads import accept_image
 
 router = APIRouter(
     prefix="/admin", tags=["admin"], dependencies=[Depends(require_superadmin)]
 )
 
 
-@router.get("/stats")
-async def stats(db: AsyncSession = Depends(get_db)):
-    """Counters for the admin dashboard cards."""
-    users = await db.scalar(select(func.count(User.id)))
-    events = await db.scalar(select(func.count(Event.id)))
-    tickets = await db.scalar(select(func.count(Ticket.id)))
-    used = await db.scalar(select(func.count(Ticket.id)).where(Ticket.used.is_(True)))
-    revenue = await db.scalar(select(func.coalesce(func.sum(Ticket.price_paid), 0)))
-    return {
-        "users": users or 0,
-        "events": events or 0,
-        "tickets": tickets or 0,
-        "tickets_used": used or 0,
-        "revenue": float(revenue or 0),
-    }
-
-
-@router.get("/events", response_model=list[EventOut])
-async def admin_events(db: AsyncSession = Depends(get_db)):
-    """Every event, newest first, with the capacity it actually has.
-
-    Shares the serializer with the public listing. Counting here separately is
-    what put "∞" in the admin tables: a seated event stores capacity 0, because
-    its seats live on the halls its showings run in.
-    """
-    result = await db.execute(select(Event).order_by(Event.date.desc()))
-    return await serialize_events(db, list(result.scalars().all()))
-
-
-@router.post("/events", response_model=EventOut, status_code=201)
-async def create_event(data: EventCreate, db: AsyncSession = Depends(get_db)):
-    event = Event(**data.model_dump())
-    db.add(event)
-    await db.flush()
-    await db.refresh(event)
-    return EventOut.model_validate(event)
-
-
-@router.patch("/events/{event_id}", response_model=EventOut)
-async def update_event(
-    event_id: int, data: EventUpdate, db: AsyncSession = Depends(get_db)
-):
-    event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
-    for field, value in data.model_dump(exclude_unset=True).items():
-        setattr(event, field, value)
-    await db.flush()
-    await db.refresh(event)
-    return EventOut.model_validate(event)
-
-
-@router.delete("/events/{event_id}", status_code=204)
-async def delete_event(event_id: int, db: AsyncSession = Depends(get_db)):
-    event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
-    await db.delete(event)
-
-
 @router.get("/scanners", response_model=list[UserOut])
-async def admin_scanners(db: AsyncSession = Depends(get_db)):
+async def admin_scanners(db: AsyncSession = Depends(get_db, scope="function")):
     """Everyone who can operate the scanner page."""
     result = await db.execute(
         select(User).where(User.role == "scanner").order_by(User.username)
@@ -104,7 +46,7 @@ async def admin_scanners(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/users", response_model=list[UserAdminOut])
-async def admin_users(db: AsyncSession = Depends(get_db)):
+async def admin_users(db: AsyncSession = Depends(get_db, scope="function")):
     """Users with the venues each is attached to.
 
     The grants come from one grouped query rather than a request per venue from
@@ -137,7 +79,7 @@ async def admin_users(db: AsyncSession = Depends(get_db)):
 
 @router.patch("/users/{user_id}/role", response_model=UserOut)
 async def update_user_role(
-    user_id: int, data: UserRoleUpdate, db: AsyncSession = Depends(get_db)
+    user_id: int, data: UserRoleUpdate, db: AsyncSession = Depends(get_db, scope="function")
 ):
     if data.role not in ROLE_RANK:
         raise HTTPException(status_code=400, detail=f"Неизвестная роль: {data.role}")
@@ -151,7 +93,7 @@ async def update_user_role(
 
 
 @router.delete("/users/{user_id}", status_code=204)
-async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_user(user_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -161,7 +103,7 @@ async def delete_user(user_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/tickets", response_model=list[TicketOut])
-async def admin_tickets(db: AsyncSession = Depends(get_db)):
+async def admin_tickets(db: AsyncSession = Depends(get_db, scope="function")):
     result = await db.execute(
         select(Ticket)
         .options(
@@ -187,7 +129,7 @@ async def _require_venue(db: AsyncSession, venue_id: int) -> Venue:
 
 
 @router.get("/venues/{venue_id}/staff", response_model=list[VenueStaffOut])
-async def venue_staff(venue_id: int, db: AsyncSession = Depends(get_db)):
+async def venue_staff(venue_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     await _require_venue(db, venue_id)
     result = await db.execute(
         select(
@@ -225,7 +167,7 @@ async def venue_staff(venue_id: int, db: AsyncSession = Depends(get_db)):
 async def assign_venue_staff(
     venue_id: int,
     data: VenueStaffAssign,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Grant a venue-scoped role, replacing any existing grant on this venue."""
     await _require_venue(db, venue_id)
@@ -273,7 +215,7 @@ async def assign_venue_staff(
 async def remove_venue_staff(
     venue_id: int,
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     await _require_venue(db, venue_id)
 
@@ -298,116 +240,6 @@ async def remove_venue_staff(
         )
         if not left:
             user.role = "user"
-
-
-# --- event artwork --------------------------------------------------------
-
-IMAGE_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "uploads", "events")
-)
-MAX_IMAGE_BYTES = 5 * 1024 * 1024
-
-# Magic numbers, not the filename or the declared content type: both come from
-# the caller and neither says what the bytes actually are.
-IMAGE_SIGNATURES = [
-    (bytes.fromhex("ffd8ff"), ".jpg"),
-    (bytes.fromhex("89504e470d0a1a0a"), ".png"),
-    (b"GIF87a", ".gif"),
-    (b"GIF89a", ".gif"),
-    (b"RIFF", ".webp"),  # confirmed against the WEBP tag below
-]
-
-
-def _image_extension(payload: bytes) -> str | None:
-    for signature, extension in IMAGE_SIGNATURES:
-        if not payload.startswith(signature):
-            continue
-        if extension == ".webp" and payload[8:12] != b"WEBP":
-            continue
-        return extension
-    return None
-
-
-def _accept_image(payload: bytes) -> str:
-    """Whether these bytes may be stored, and as what. Raises if they may not.
-
-    Shared by every upload, so a rule tightened here is tightened everywhere
-    rather than in whichever endpoint someone remembered.
-    """
-    if not payload:
-        raise HTTPException(status_code=400, detail="Файл пустой")
-    if len(payload) > MAX_IMAGE_BYTES:
-        raise HTTPException(status_code=400, detail="Изображение больше 5 МБ")
-
-    extension = _image_extension(payload)
-    if extension is None:
-        raise HTTPException(
-            status_code=400, detail="Нужен файл JPEG, PNG, GIF или WebP"
-        )
-    return extension
-
-
-@router.post("/events/{event_id}/image", response_model=EventOut)
-async def upload_event_image(
-    event_id: int,
-    file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
-):
-    """Replace an event's artwork. The old file is removed once the new one is
-    in place, so re-uploading does not pile up orphans."""
-    event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
-
-    payload = await file.read()
-    extension = _accept_image(payload)
-
-    os.makedirs(IMAGE_DIR, exist_ok=True)
-    # A generated name, never the uploaded one, which is attacker-supplied and
-    # could carry path separators out of the directory.
-    stored = f"{uuid.uuid4().hex}{extension}"
-    with open(os.path.join(IMAGE_DIR, stored), "wb") as handle:
-        handle.write(payload)
-
-    previous = event.image_url
-    # Relative to the site root, so the address survives the tunnel changing host.
-    event.image_url = f"/uploads/events/{stored}"
-    await db.flush()
-
-    if previous and previous.startswith("/uploads/events/"):
-        try:
-            old = os.path.join(IMAGE_DIR, os.path.basename(previous))
-            if os.path.isfile(old):
-                os.remove(old)
-        except OSError:
-            # The row already points at the new file; a stray one is not worth
-            # failing the request over.
-            pass
-
-    await db.refresh(event)
-    return EventOut.model_validate(event)
-
-
-@router.delete("/events/{event_id}/image", response_model=EventOut)
-async def delete_event_image(event_id: int, db: AsyncSession = Depends(get_db)):
-    event = await db.get(Event, event_id)
-    if not event:
-        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
-
-    previous = event.image_url
-    event.image_url = None
-    await db.flush()
-
-    if previous and previous.startswith("/uploads/events/"):
-        try:
-            path = os.path.join(IMAGE_DIR, os.path.basename(previous))
-            if os.path.isfile(path):
-                os.remove(path)
-        except OSError:
-            pass
-
-    await db.refresh(event)
-    return EventOut.model_validate(event)
 
 
 # --- venue photo ----------------------------------------------------------
@@ -438,7 +270,7 @@ def _drop_venue_files(venue_id: int, keep: str | None = None) -> None:
 async def upload_venue_image(
     venue_id: int,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Replace a venue's photo."""
     venue = await db.get(Venue, venue_id)
@@ -446,7 +278,7 @@ async def upload_venue_image(
         raise HTTPException(status_code=404, detail="Площадка не найдена")
 
     payload = await file.read()
-    extension = _accept_image(payload)
+    extension = accept_image(payload)
 
     os.makedirs(VENUE_IMAGE_DIR, exist_ok=True)
     stored = f"{venue_id}{extension}"
@@ -464,7 +296,7 @@ async def upload_venue_image(
 
 
 @router.delete("/venues/{venue_id}/image", response_model=VenueOut)
-async def delete_venue_image(venue_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_venue_image(venue_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     venue = await db.get(Venue, venue_id)
     if not venue:
         raise HTTPException(status_code=404, detail="Площадка не найдена")

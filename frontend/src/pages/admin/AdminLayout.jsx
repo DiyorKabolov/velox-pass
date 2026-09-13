@@ -2,9 +2,10 @@ import { NavLink } from 'react-router-dom'
 
 const TABS = [
   { to: '/admin', label: 'Сводка', end: true },
-  { to: '/admin/events', label: 'Мероприятия' },
+  // Sessions used to be a tab of their own. They live inside this one now:
+  // scheduling a showing always starts from the event it belongs to.
+  { to: '/admin/events', label: 'Афиша' },
   { to: '/admin/venues', label: 'Площадки' },
-  { to: '/admin/sessions', label: 'Сеансы' },
   { to: '/admin/users', label: 'Пользователи' },
   { to: '/admin/tickets', label: 'Билеты' },
   { to: '/admin/pdf-templates', label: 'Шаблоны PDF' },

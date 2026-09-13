@@ -3,6 +3,7 @@ import { CalendarDays, Clock, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { downloadPdf, fetchQrBlobUrl } from '../../api/tickets'
 import { formatDateTime, formatIsoDate, isExpired } from '../../utils/dates'
+import { isTicketExpired } from '../../utils/eventState'
 import { getTicketColors, readableOn, withAlpha } from '../../utils/colors'
 import TruncatedText from '../ui/TruncatedText'
 
@@ -263,7 +264,7 @@ export default function TicketCard({ ticket }) {
   const torn = Boolean(ticket.used)
   const state = torn
     ? STATES.used
-    : isExpired(ticket.event_date)
+    : isTicketExpired(ticket)
       ? STATES.expired
       : STATES.valid
 

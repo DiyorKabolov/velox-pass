@@ -19,7 +19,7 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 
 async def get_optional_user(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     credentials=Depends(bearer_scheme),
 ) -> User | None:
     """The signed-in user, or None. The listing stays public, so a missing or
@@ -40,7 +40,7 @@ async def list_events(
     tags: str | None = Query(
         None, description="Через запятую; вернутся события с любым из тегов"
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     user: User | None = Depends(get_optional_user),
 ):
     """Public event listing used by the home page.
@@ -52,7 +52,18 @@ async def list_events(
     """
     query = select(Event).order_by(Event.date.asc())
     if upcoming_only:
-        query = query.where(Event.date >= func.now())
+        # A series starts on its first showing but runs until its last, so it
+        # stays upcoming while any live showing is still ahead.
+        showing_ahead = (
+            select(Session.id)
+            .where(
+                Session.event_id == Event.id,
+                Session.datetime >= func.now(),
+                Session.status.not_in(("cancelled", "finished")),
+            )
+            .exists()
+        )
+        query = query.where(or_(Event.date >= func.now(), showing_ahead))
 
     if my_venues:
         if user is None:
@@ -95,7 +106,7 @@ async def list_events(
 
 
 @router.get("/{event_id}", response_model=EventOut)
-async def get_event(event_id: int, db: AsyncSession = Depends(get_db)):
+async def get_event(event_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     event = await db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Мероприятие не найдено")
@@ -109,7 +120,7 @@ async def event_sessions(
         False,
         description="Показывать также отменённые и прошедшие сеансы",
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Showings of one event, soonest first, each with its own seat counts.
 

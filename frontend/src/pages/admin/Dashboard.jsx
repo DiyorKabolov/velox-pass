@@ -72,15 +72,14 @@ export default function Dashboard() {
                 {formatShortDate(event.date)}
               </Td>
               <Td className="text-[var(--muted)]">{event.location || '—'}</Td>
-              <Td className="text-right font-mono2 text-xs">
-                {capacityLabel(event)}
-                {/* A seated event's capacity is the sum over its showings, so
-                    the pair above only makes sense with their number. */}
+              <Td className="text-right font-mono2 text-xs whitespace-nowrap">
+                {/* Left of the pair, so "продано / всего" stays one figure. */}
                 {event.has_seats && sessionsLabel(event) && (
-                  <span className="ml-1.5 text-[10px] text-[var(--muted2)]">
-                    ({sessionsLabel(event)})
+                  <span className="mr-2 text-[10px] text-[var(--muted2)]">
+                    {sessionsLabel(event)}
                   </span>
                 )}
+                {capacityLabel(event)}
               </Td>
             </tr>
           ))}

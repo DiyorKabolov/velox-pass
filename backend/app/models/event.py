@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +16,9 @@ class Event(Base):
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     capacity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Ticket price for an event without seats. Seated events price each
+    # category per session, in seat_prices, and leave this at 0.
+    price: Mapped[float] = mapped_column(Numeric(10, 2), default=0, nullable=False)
     # When true, tickets are bound to a seat from the venue hall map.
     has_seats: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     venue_id: Mapped[int | None] = mapped_column(
@@ -31,6 +34,11 @@ class Event(Base):
     image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # NULL means "whichever template is marked default", resolved at render time
     # rather than copied here, so changing the default reaches every event.
+    # The account that created it. Lets a venue administrator manage their own
+    # events before any showing ties one to their halls.
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     template_id: Mapped[int | None] = mapped_column(
         ForeignKey("pdf_templates.id", ondelete="SET NULL"), index=True, nullable=True
     )

@@ -20,6 +20,10 @@ class TicketOut(BaseModel):
     # Flattened extras filled in by the ticket service for the UI.
     event_title: str | None = None
     event_date: datetime | None = None
+    # When this ticket is for: its showing, or the event itself when it has
+    # none. A series shares one event date -- its first showing -- so reading
+    # event_date called a ticket for next Friday expired after last Sunday.
+    starts_at: datetime | None = None
     event_location: str | None = None
     seat_label: str | None = None
     hall_name: str | None = None

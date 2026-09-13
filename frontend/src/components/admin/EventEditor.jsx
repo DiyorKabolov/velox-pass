@@ -4,11 +4,10 @@ import { Link } from 'react-router-dom'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import { getPreviewImage, getTemplates } from '../../api/pdfTemplates'
-import { EVENT_TAGS, tagColor } from '../../utils/eventTags'
+import useAuth from '../../hooks/useAuth'
 import EventImageUpload from './EventImageUpload'
-import ColorField from './ColorField'
 import EventPreview from './EventPreview'
-import { COLOR_PRESETS, DEFAULT_COLORS } from './eventForm'
+import { CardColors, TagPicker } from './EventStyleFields'
 
 /**
  * The whole event form, shared by the edit modal and the create page so the
@@ -56,12 +55,9 @@ export default function EventEditor({ form, onChange }) {
   const set = (patch) => onChange({ ...form, ...patch })
   const field = (name) => (event) => set({ [name]: event.target.value })
 
-  const activePreset = COLOR_PRESETS.find(
-    (preset) =>
-      preset.card_bg === form.card_bg &&
-      preset.card_accent === form.card_accent &&
-      preset.card_text === form.card_text,
-  )
+  // Templates are managed by the superadmin, and the list behind the picker is
+  // theirs alone; anyone else would get a 403 from it.
+  const { isSuperadmin } = useAuth()
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -103,11 +99,67 @@ export default function EventEditor({ form, onChange }) {
             name="capacity"
             type="number"
             min={0}
-            value={form.capacity}
+            value={form.has_seats ? '' : form.capacity}
+            disabled={form.has_seats}
             onChange={(event) => set({ capacity: event.target.value })}
-            placeholder="0 — без ограничения"
+            placeholder={
+              form.has_seats ? 'Из залов сеансов' : '0 — без ограничения'
+            }
           />
         </div>
+
+        {/* Which kind of event this is decides where its capacity comes from,
+            and until now there was no way to say: every event created here was
+            unseated, and a showing could never be scheduled for it. */}
+        <div
+          role="radiogroup"
+          aria-label="Рассадка"
+          className="flex gap-1 rounded-[var(--radius-sm)] border border-[var(--border)] p-1"
+        >
+          {[
+            { seated: false, label: 'Свободная рассадка' },
+            { seated: true, label: 'Места в зале' },
+          ].map((option) => {
+            const active = Boolean(form.has_seats) === option.seated
+            return (
+              <button
+                key={option.label}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => set({ has_seats: option.seated })}
+                className={[
+                  'flex-1 rounded-[6px] px-3 py-1.5 text-xs transition-all duration-150',
+                  active
+                    ? 'bg-[var(--accent)] font-medium text-[var(--bg)]'
+                    : 'text-[var(--muted)] hover:text-[var(--text)]',
+                ].join(' ')}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
+        <p className="-mt-1 text-xs text-[var(--muted2)]">
+          {form.has_seats
+            ? 'Зрители выбирают конкретные места. Вместимость складывается из залов, где назначены сеансы.'
+            : 'Билет без места. Вместимость задаётся здесь; ноль — без ограничения.'}
+        </p>
+
+        {/* Seated events price per category on each session, so the field
+            only exists for the other kind. */}
+        {!form.has_seats && (
+          <Input
+            label="Цена билета, сомони"
+            name="price"
+            type="number"
+            min={0}
+            step="0.01"
+            value={form.price ?? 0}
+            onChange={(event) => set({ price: event.target.value })}
+            placeholder="0 — бесплатно"
+          />
+        )}
 
         <Input
           label="Место проведения"
@@ -117,106 +169,9 @@ export default function EventEditor({ form, onChange }) {
           placeholder="Большой концертный зал"
         />
 
-        <div className="pt-1">
-          <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
-            Теги
-          </span>
-          {/* Pills rather than a dropdown: the whole vocabulary is ten items,
-              several may apply at once, and the choice reads at a glance. */}
-          <div className="mb-1 flex flex-wrap gap-2">
-            {EVENT_TAGS.map((tag) => {
-              const on = (form.tags ?? []).includes(tag)
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() =>
-                    set({
-                      tags: on
-                        ? (form.tags ?? []).filter((t) => t !== tag)
-                        : [...(form.tags ?? []), tag],
-                    })
-                  }
-                  className={[
-                    'rounded-full border px-3 py-1.5 text-xs transition-all duration-150',
-                    'active:scale-[0.95]',
-                    on ? 'font-medium' : 'text-[var(--muted)] hover:text-[var(--text)]',
-                  ].join(' ')}
-                  style={
-                    on
-                      ? {
-                          borderColor: tagColor(tag),
-                          background: `${tagColor(tag)}22`,
-                          color: tagColor(tag),
-                        }
-                      : { borderColor: 'var(--border)' }
-                  }
-                >
-                  {tag}
-                </button>
-              )
-            })}
-          </div>
-          <p className="mb-5 text-xs text-[var(--muted2)]">
-            По тегам зрители фильтруют афишу. Можно выбрать несколько.
-          </p>
-
-          <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
-            Цвета билета
-          </span>
-
-          <div className="mb-4 flex flex-wrap gap-2">
-            {COLOR_PRESETS.map((preset) => {
-              const isActive = activePreset?.name === preset.name
-              return (
-                <button
-                  key={preset.name}
-                  type="button"
-                  onClick={() =>
-                    set({
-                      card_bg: preset.card_bg,
-                      card_accent: preset.card_accent,
-                      card_text: preset.card_text,
-                    })
-                  }
-                  className={[
-                    'flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-xs transition-all duration-150 active:scale-[0.95]',
-                    isActive
-                      ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--text)]'
-                      : 'border-[var(--border)] text-[var(--muted)] hover:border-[var(--border2)] hover:text-[var(--text)]',
-                  ].join(' ')}
-                >
-                  <span
-                    className="h-4 w-4 rounded-full border border-black/20"
-                    style={{ background: preset.card_accent }}
-                  />
-                  {preset.name}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <ColorField
-              label="Фон"
-              value={form.card_bg}
-              fallback={DEFAULT_COLORS.card_bg}
-              onChange={(card_bg) => set({ card_bg })}
-            />
-            <ColorField
-              label="Акцент"
-              value={form.card_accent}
-              fallback={DEFAULT_COLORS.card_accent}
-              onChange={(card_accent) => set({ card_accent })}
-            />
-            <ColorField
-              label="Текст"
-              value={form.card_text}
-              fallback={DEFAULT_COLORS.card_text}
-              onChange={(card_text) => set({ card_text })}
-            />
-          </div>
+        <div className="space-y-6 pt-1">
+          <TagPicker value={form.tags} onChange={(tags) => set({ tags })} />
+          <CardColors value={form} onChange={(colors) => set(colors)} />
         </div>
       </div>
 
@@ -236,15 +191,17 @@ export default function EventEditor({ form, onChange }) {
           </p>
         </div>
 
-        <div className="mb-6">
-          <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
-            PDF шаблон
-          </span>
-          <TemplatePicker
-            value={form.template_id}
-            onChange={(template_id) => set({ template_id })}
-          />
-        </div>
+        {isSuperadmin && (
+          <div className="mb-6">
+            <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+              PDF шаблон
+            </span>
+            <TemplatePicker
+              value={form.template_id}
+              onChange={(template_id) => set({ template_id })}
+            />
+          </div>
+        )}
 
         <EventPreview form={form} />
       </div>

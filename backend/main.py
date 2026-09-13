@@ -19,6 +19,7 @@ from app.routers import (
     pdf_templates,
     scanner,
     sessions,
+    staff_events,
     tickets,
     venue_admin,
     venues,
@@ -53,6 +54,9 @@ app.include_router(tickets.router, prefix=API_PREFIX)
 app.include_router(venues.router, prefix=API_PREFIX)
 app.include_router(sessions.router, prefix=API_PREFIX)
 app.include_router(scanner.router, prefix=API_PREFIX)
+# Before the superadmin router: both live under /admin, and these are the
+# endpoints a venue administrator must be able to reach.
+app.include_router(staff_events.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(pdf_templates.router, prefix=API_PREFIX)
 app.include_router(pdf_templates.event_router, prefix=API_PREFIX)

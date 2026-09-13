@@ -18,7 +18,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
+async def register(data: UserCreate, db: AsyncSession = Depends(get_db, scope="function")):
     """Create an account and email a six-digit confirmation code.
 
     The account is created even when the mail server is unreachable; the
@@ -35,20 +35,20 @@ async def register(data: UserCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(data: UserLogin, db: AsyncSession = Depends(get_db, scope="function")):
     user, token = await auth_service.login_user(db, data)
     return Token(access_token=token, user=UserOut.model_validate(user))
 
 
 @router.post("/verify", response_model=Token)
-async def verify(data: VerifyRequest, db: AsyncSession = Depends(get_db)):
+async def verify(data: VerifyRequest, db: AsyncSession = Depends(get_db, scope="function")):
     """Confirm the email with the code and return a ready-to-use token."""
     user, token = await auth_service.verify_email(db, str(data.email), data.code)
     return Token(access_token=token, user=UserOut.model_validate(user))
 
 
 @router.post("/resend")
-async def resend(data: ResendRequest, db: AsyncSession = Depends(get_db)):
+async def resend(data: ResendRequest, db: AsyncSession = Depends(get_db, scope="function")):
     """Send a fresh code to an account that is not verified yet."""
     sent = await auth_service.resend_code(db, str(data.email))
     return {"sent": sent}

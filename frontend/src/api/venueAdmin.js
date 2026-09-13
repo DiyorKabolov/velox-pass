@@ -7,13 +7,12 @@ export async function getMyVenues() {
 }
 
 /**
- * Events of the caller's venues.
- *
- * `my_venues` is opt-in on purpose: the same endpoint serves the public
- * listing, which must keep showing every venue's events to everyone.
+ * Events this administrator may manage. The backend narrows the list -- their
+ * venues, the halls their showings use, and anything they created themselves --
+ * so a superadmin calling it gets everything.
  */
 export async function getMyEvents() {
-  const { data } = await client.get('/events', { params: { my_venues: true } })
+  const { data } = await client.get('/admin/events')
   return data
 }
 

@@ -25,6 +25,18 @@ class Base(DeclarativeBase):
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """One session per request, committed when the endpoint returns.
+
+    Always declare it as `Depends(get_db, scope="function")`. The default scope
+    runs everything after the yield once the response has already been sent, so
+    the commit landed after the client had its answer: a request made straight
+    afterwards -- save an event, then schedule it -- could look for the new row
+    before it existed. Measured at about 1 in 100 back-to-back writes. With
+    scope="function" the commit happens before the response goes out.
+
+    Every use has to carry the same scope. It is part of FastAPI's dependency
+    cache key, so a mix would hand one request two separate sessions.
+    """
     async with AsyncSessionLocal() as session:
         try:
             yield session

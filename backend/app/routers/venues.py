@@ -112,7 +112,7 @@ def seats_for_layout(hall: Hall) -> list[Seat]:
 @router.get("", response_model=list[VenueOut])
 async def list_venues(
     scope: VenueScope = Depends(get_current_venue_admin),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Venues the caller manages, with a hall count so the admin table needs
     one call. No longer public: it is only ever read by the admin screens, and
@@ -142,7 +142,7 @@ async def list_venues(
 async def create_venue(
     data: VenueCreate,
     _=Depends(require_superadmin),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     venue = Venue(**data.model_dump())
     db.add(venue)
@@ -203,7 +203,7 @@ async def _upcoming_by_venue(db: AsyncSession) -> dict[int, tuple[int, datetime]
 
 
 @router.get("/public", response_model=list[VenueOut])
-async def list_public_venues(db: AsyncSession = Depends(get_db)):
+async def list_public_venues(db: AsyncSession = Depends(get_db, scope="function")):
     """Every venue, for the visitor-facing catalogue. No sign-in required."""
     venues = list((await db.execute(select(Venue).order_by(Venue.name))).scalars().all())
 
@@ -228,7 +228,7 @@ async def list_public_venues(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/public/{venue_id}", response_model=VenueOut)
-async def get_public_venue(venue_id: int, db: AsyncSession = Depends(get_db)):
+async def get_public_venue(venue_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     """One venue, for its public page."""
     venue = await db.get(Venue, venue_id)
     if not venue:
@@ -256,7 +256,7 @@ async def venue_sessions(
         le=840,
         description="Часовой пояс, в котором понимать date: минуты к востоку от UTC",
     ),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Upcoming showings at a venue, for its public schedule.
 
@@ -356,7 +356,7 @@ async def venue_sessions(
 async def get_venue(
     venue_id: int,
     scope: VenueScope = Depends(get_current_venue_admin),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     venue = await db.get(Venue, venue_id)
     if not venue:
@@ -374,7 +374,7 @@ async def update_venue(
     venue_id: int,
     data: VenueUpdate,
     scope: VenueScope = Depends(get_current_venue_admin),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     venue = await db.get(Venue, venue_id)
     if not venue:
@@ -391,7 +391,7 @@ async def update_venue(
 async def delete_venue(
     venue_id: int,
     _=Depends(require_superadmin),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     venue = await db.get(Venue, venue_id)
     if not venue:
@@ -403,7 +403,7 @@ async def delete_venue(
 async def list_halls(
     venue_id: int,
     scope: VenueScope = Depends(get_current_venue_admin),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     scope.require(venue_id)
     result = await db.execute(
@@ -423,13 +423,14 @@ async def list_halls(
 @router.post("/halls", response_model=HallOut, status_code=201)
 async def create_hall(
     data: HallCreate,
-    scope: VenueScope = Depends(get_current_venue_admin),
-    db: AsyncSession = Depends(get_db),
+    # Superadmin only. The structure of a hall is what every sold seat refers
+    # to; a venue administrator reads it but does not reshape it.
+    _=Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Create a hall and materialise its seats from layout_json."""
     if not await db.get(Venue, data.venue_id):
         raise HTTPException(status_code=404, detail="Площадка не найдена")
-    scope.require(data.venue_id)
 
     hall = Hall(**data.model_dump())
     # Keep rows/cols in step with the grid that was actually sent.
@@ -450,7 +451,7 @@ async def create_hall(
 
 
 @router.get("/halls/{hall_id}", response_model=HallOut)
-async def get_hall(hall_id: int, db: AsyncSession = Depends(get_db)):
+async def get_hall(hall_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     """Hall with its full seat list, for the layout editor."""
     hall = await db.get(Hall, hall_id)
     if not hall:
@@ -470,15 +471,14 @@ async def get_hall(hall_id: int, db: AsyncSession = Depends(get_db)):
 async def update_hall(
     hall_id: int,
     data: HallUpdate,
-    scope: VenueScope = Depends(get_current_venue_admin),
-    db: AsyncSession = Depends(get_db),
+    _=Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Update a hall. A new layout replaces every seat, so it is refused once
     any seat in the hall has been sold."""
     hall = await db.get(Hall, hall_id)
     if not hall:
         raise HTTPException(status_code=404, detail="Зал не найден")
-    scope.require(hall.venue_id)
 
     fields = data.model_dump(exclude_unset=True)
     relayout = "layout_json" in fields and fields["layout_json"] is not None
@@ -520,13 +520,12 @@ async def update_hall(
 @router.delete("/halls/{hall_id}", status_code=204)
 async def delete_hall(
     hall_id: int,
-    scope: VenueScope = Depends(get_current_venue_admin),
-    db: AsyncSession = Depends(get_db),
+    _=Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     hall = await db.get(Hall, hall_id)
     if not hall:
         raise HTTPException(status_code=404, detail="Зал не найден")
-    scope.require(hall.venue_id)
     await db.delete(hall)
 
 
@@ -534,7 +533,7 @@ async def delete_hall(
 async def list_seats(
     hall_id: int,
     session_id: int | None = Query(None, description="Mark seats sold for this session"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Seats of a hall; with ?session_id also says which are already sold."""
     if not await db.get(Hall, hall_id):

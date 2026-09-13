@@ -5,6 +5,7 @@ import { MotionConfig } from 'framer-motion'
 import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import App from './App'
+import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -23,7 +24,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         {/* reducedMotion="user" disables animation when the OS asks for it. */}
         <MotionConfig reducedMotion="user">
-          <App />
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
           <Toaster
           position="bottom-right"
           toastOptions={{

@@ -22,6 +22,9 @@ export const EMPTY_EVENT = {
   date: '',
   location: '',
   capacity: 0,
+  // Ticket price of an event without seats. Seated events price per category
+  // on each session instead.
+  price: 0,
   has_seats: false,
   tags: [],
   template_id: null,
@@ -40,6 +43,7 @@ export function toFormValue(event) {
     date: toDatetimeLocal(event.date),
     location: event.location ?? '',
     capacity: event.capacity ?? 0,
+    price: event.price ?? 0,
     has_seats: Boolean(event.has_seats),
     tags: orderTags(event.tags),
     template_id: event.template_id ?? null,
@@ -59,6 +63,7 @@ export function toPayload(form) {
     date: fromDatetimeLocal(form.date),
     location: form.location.trim() || null,
     capacity: Number(form.capacity) || 0,
+    price: form.has_seats ? 0 : Number(form.price) || 0,
     has_seats: Boolean(form.has_seats),
     // Ordered here too: the API normalises anyway, and sending them sorted
     // keeps the request identical for the same set of choices.
@@ -75,6 +80,7 @@ export function validate(form) {
   if (!form.date) return 'Укажите дату'
   if (!fromDatetimeLocal(form.date)) return 'Некорректная дата'
   if (Number(form.capacity) < 0) return 'Вместимость не может быть отрицательной'
+  if (Number(form.price) < 0) return 'Цена не может быть отрицательной'
   return null
 }
 

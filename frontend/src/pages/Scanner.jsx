@@ -48,7 +48,7 @@ const isFatal = (err) =>
  * usually reports no facing mode at all, so only the two branches that pick a
  * rear camera on purpose can answer it with confidence.
  */
-async function startRearCamera(qr, config, onCode) {
+async function startRearCamera(qr, config, onCode, isStale = () => false) {
   // Per-frame decode misses are normal; ignore them.
   const ignoreMisses = () => {}
 
@@ -58,6 +58,11 @@ async function startRearCamera(qr, config, onCode) {
   } catch (err) {
     if (isFatal(err)) throw err
   }
+
+  // Checked between attempts, not only at the end: three getUserMedia round
+  // trips take seconds, and without this the camera light comes on after the
+  // operator has already left the page.
+  if (isStale()) return false
 
   // Some browsers refuse the exact constraint yet still list the camera, so
   // take it by id instead. Labels are readable once permission has been given,
@@ -73,10 +78,50 @@ async function startRearCamera(qr, config, onCode) {
     if (isFatal(err)) throw err
   }
 
+  if (isStale()) return false
+
   // Nothing rear-facing on this device: run what there is and let the caller
   // warn about it, rather than showing a black screen.
   await qr.start({ facingMode: 'environment' }, config, onCode, ignoreMisses)
   return readFacingMode(qr) === 'environment'
+}
+
+/**
+ * Shut the camera down without ever throwing.
+ *
+ * html5-qrcode's stop() throws a plain string *synchronously* when the scanner
+ * is not running -- which it is not while start() is still negotiating, and
+ * never is when start() failed outright. A synchronous throw is not a rejected
+ * promise, so the .catch() that looked like it covered this could never run,
+ * and the exception escaped the effect cleanup. React treats an error thrown
+ * while unmounting as fatal and tears the whole tree down, which is the blank
+ * page that appears on leaving the scanner.
+ */
+export function shutDownCamera(qr) {
+  if (!qr) return
+  try {
+    const stopping = qr.stop()
+    // Defensive: a future version returning nothing must not break the chain.
+    if (stopping && typeof stopping.then === 'function') {
+      stopping
+        .then(() => {
+          // The container is React's and may already be detached by now.
+          try {
+            qr.clear()
+          } catch {
+            /* nothing left to clear */
+          }
+        })
+        .catch(() => {})
+    }
+  } catch {
+    // Never started, so there is nothing to stop and nothing to wait for.
+    try {
+      qr.clear()
+    } catch {
+      /* nothing left to clear */
+    }
+  }
 }
 
 function Brackets() {
@@ -157,12 +202,13 @@ export default function Scanner() {
       // Without it the whole frame is scanned and only our guide shows.
       { fps: 10 },
       handleCode,
+      () => stopped,
     )
       .then((rear) => {
-        // Leaving the page can now beat the camera coming up, since there are
-        // up to three attempts to get through; the light must not stay on.
+        // Leaving the page can beat the camera coming up, since there are up to
+        // three attempts to get through; the light must not stay on.
         if (stopped) {
-          qr.stop().catch(() => {})
+          shutDownCamera(qr)
           return
         }
         setRunning(true)
@@ -172,6 +218,8 @@ export default function Scanner() {
         setFrontCamera(!rear)
       })
       .catch((err) => {
+        // Nothing to report to a page that is no longer on screen.
+        if (stopped) return
         const text = String(err?.name || err || '')
         setError(
           /NotAllowed|Permission|Denied/i.test(text)
@@ -185,8 +233,7 @@ export default function Scanner() {
     return () => {
       stopped = true
       clearTimeout(resultTimer.current)
-      // stop() rejects if the camera never started; nothing to clean up then.
-      qr.stop().then(() => qr.clear()).catch(() => {})
+      shutDownCamera(qr)
     }
     // handleCode is stable enough: the camera must not restart on each scan.
     // eslint-disable-next-line react-hooks/exhaustive-deps

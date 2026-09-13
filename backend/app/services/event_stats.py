@@ -285,6 +285,13 @@ def build_event_out(event: Event, stat: EventStat) -> EventOut:
     payload.available_seats = stat.available
     payload.has_active_session = stat.has_active_session
     payload.sessions_count = stat.sessions_count
+
+    if event.has_seats and stat.sessions:
+        payload.ends_at = max(row.datetime for row in stat.sessions)
+        payload.is_over = not stat.has_active_session
+    else:
+        payload.ends_at = event.date
+        payload.is_over = event.date is not None and event.date < _now()
     return payload
 
 

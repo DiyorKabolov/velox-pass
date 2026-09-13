@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 from app.models.event import Event
 from app.models.pdf_template import PdfTemplate
 from app.models.seat import Seat
+from app.models.session import Session
 from app.models.seat_price import SeatPrice
 from app.models.ticket import Ticket
 from app.models.user import User
@@ -63,6 +64,11 @@ def serialize_ticket(ticket: Ticket) -> TicketOut:
         created_at=ticket.created_at,
         event_title=event.title if event else None,
         event_date=event.date if event else None,
+        starts_at=(
+            ticket.session.datetime
+            if ticket.session is not None
+            else (event.date if event else None)
+        ),
         event_location=event.location if event else None,
         seat_label=(seat.label or f"R{seat.row} S{seat.col}") if seat else None,
         hall_name=hall.name if hall else None,
@@ -73,9 +79,14 @@ def serialize_ticket(ticket: Ticket) -> TicketOut:
 
 
 async def _resolve_price(
-    db: AsyncSession, session_id: int | None, seat: Seat | None
+    db: AsyncSession, event: Event, session_id: int | None, seat: Seat | None
 ) -> float:
-    if not session_id or not seat:
+    # Without a seat there is no category to look up: the event's own price is
+    # the whole answer. It used to be 0 here unconditionally, which is why every
+    # ticket to an unseated event was free whatever the organiser intended.
+    if not seat:
+        return float(event.price or 0)
+    if not session_id:
         return 0.0
     result = await db.execute(
         select(SeatPrice).where(
@@ -97,8 +108,23 @@ async def generate_ticket(
     if not event:
         raise HTTPException(status_code=404, detail="Мероприятие не найдено")
 
+    if session_id is not None:
+        # Nothing stopped a ticket being sold for a showing that had already
+        # happened, been cancelled, or belonged to another event entirely.
+        session = await db.get(Session, session_id)
+        if session is None or session.event_id != event_id:
+            raise HTTPException(
+                status_code=400, detail="Сеанс не относится к этому мероприятию"
+            )
+        if session.status == "cancelled":
+            raise HTTPException(status_code=409, detail="Сеанс отменён")
+        if session.status == "finished" or session.datetime < datetime.now(timezone.utc):
+            raise HTTPException(status_code=409, detail="Этот сеанс уже прошёл")
+
     seat: Seat | None = None
     if event.has_seats:
+        if session_id is None:
+            raise HTTPException(status_code=400, detail="Выберите сеанс")
         if not seat_id:
             raise HTTPException(
                 status_code=400, detail="Для этого мероприятия нужно выбрать место"
@@ -130,7 +156,7 @@ async def generate_ticket(
         seat_id=seat.id if seat else None,
         session_id=session_id,
         used=False,
-        price_paid=await _resolve_price(db, session_id, seat),
+        price_paid=await _resolve_price(db, event, session_id, seat),
     )
     db.add(ticket)
     await db.flush()
@@ -191,8 +217,15 @@ async def scan_ticket(
     if ticket.used:
         return "used", "Билет уже использован", ticket
 
+    # The showing decides, when there is one. A series keeps its first night as
+    # the event date, and checking that turned away every holder of a ticket
+    # for a later showing as though the whole run were over.
     event = ticket.event
-    if event and event.date and event.date < datetime.now(timezone.utc):
+    now = datetime.now(timezone.utc)
+    if ticket.session is not None:
+        if ticket.session.datetime < now:
+            return "expired", "Этот сеанс уже прошёл", ticket
+    elif event and event.date and event.date < now:
         return "expired", "Мероприятие уже завершилось", ticket
 
     ticket.used = True

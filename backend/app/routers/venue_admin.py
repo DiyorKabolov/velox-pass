@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.core.deps import require_staff, user_venue_ids
+from app.core.deps import VenueScope, get_current_venue_admin, require_staff, user_venue_ids
 from app.models.event import Event
 from app.models.hall import Hall
 from app.models.session import Session
@@ -23,6 +23,8 @@ from app.models.venue import Venue
 from app.schemas.ticket import TicketOut
 from app.schemas.user import VenueStaffOut
 from app.services import ticket_service
+from app.services.access import scoped_tickets, ticket_venue_expr, visible_events_clause
+from app.services.event_stats import DEAD_SESSION_STATUSES
 
 router = APIRouter(prefix="/venue-admin", tags=["venue-admin"])
 
@@ -54,58 +56,126 @@ def _narrow(query, venue_ids: list[int] | None):
 
 @router.get("/stats")
 async def venue_stats(
-    user: User = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    scope: VenueScope = Depends(get_current_venue_admin),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
-    venue_ids = await _scope(db, user)
-    if venue_ids is not None and not venue_ids:
-        return {
-            "venues": 0,
-            "total_tickets": 0,
-            "used_tickets": 0,
-            "active_events": 0,
+    """Totals across the caller's venues, and the same figures per venue.
+
+    Tickets are attributed to the venue they are checked in at -- the hall of
+    their showing, else their event's own venue -- so an event running at two
+    venues splits its sales between them instead of counting twice.
+    """
+    now = datetime.now(timezone.utc)
+    venues = list(
+        (
+            await db.execute(
+                select(Venue.id, Venue.name)
+                .where(Venue.id.in_(scope.ids))
+                .order_by(Venue.name)
+            )
+        ).all()
+    )
+    ids = [venue_id for venue_id, _ in venues]
+
+    def blank(venue_id=None, name=None):
+        row = {
+            "events_count": 0,
+            "tickets_sold": 0,
+            "scanned": 0,
             "revenue": 0.0,
+            "upcoming_sessions": 0,
         }
+        if venue_id is not None:
+            row.update(venue_id=venue_id, venue_name=name)
+        return row
 
-    tickets_q = _narrow(
-        select(func.count(Ticket.id)).join(Event, Event.id == Ticket.event_id), venue_ids
-    )
-    used_q = tickets_q.where(Ticket.used.is_(True))
-    revenue_q = _narrow(
-        select(func.coalesce(func.sum(Ticket.price_paid), 0)).join(
-            Event, Event.id == Ticket.event_id
-        ),
-        venue_ids,
-    )
-    # "Active" means still ahead: a finished event is not something to act on.
-    active_q = _narrow(
-        select(func.count(Event.id)).where(Event.date >= datetime.now(timezone.utc)),
-        venue_ids,
-    )
+    per_venue = {venue_id: blank(venue_id, name) for venue_id, name in venues}
 
-    return {
-        "venues": len(venue_ids) if venue_ids is not None else 0,
-        "total_tickets": await db.scalar(tickets_q) or 0,
-        "used_tickets": await db.scalar(used_q) or 0,
-        "active_events": await db.scalar(active_q) or 0,
-        "revenue": float(await db.scalar(revenue_q) or 0),
-    }
+    if ids:
+        venue = ticket_venue_expr()
+        ticket_rows = await db.execute(
+            scoped_tickets(
+                select(
+                    venue,
+                    func.count(Ticket.id),
+                    func.count(Ticket.id).filter(Ticket.used.is_(True)),
+                    func.coalesce(func.sum(Ticket.price_paid), 0),
+                ),
+                scope,
+            )
+            .where(venue.in_(ids))
+            .group_by(venue)
+        )
+        for venue_id, sold, scanned, revenue in ticket_rows.all():
+            per_venue[venue_id].update(
+                tickets_sold=sold, scanned=scanned, revenue=float(revenue)
+            )
+
+        # An event counts at every venue it touches: its own, and each hall its
+        # showings use. The union keeps one event from counting twice at one
+        # venue when both routes lead there.
+        touches = (
+            select(Event.venue_id.label("venue_id"), Event.id.label("event_id"))
+            .where(Event.venue_id.in_(ids))
+            .union(
+                select(Hall.venue_id, Session.event_id)
+                .join(Session, Session.hall_id == Hall.id)
+                .where(Hall.venue_id.in_(ids))
+            )
+            .subquery()
+        )
+        for venue_id, count in (
+            await db.execute(
+                select(touches.c.venue_id, func.count(touches.c.event_id)).group_by(
+                    touches.c.venue_id
+                )
+            )
+        ).all():
+            per_venue[venue_id]["events_count"] = count
+
+        for venue_id, count in (
+            await db.execute(
+                select(Hall.venue_id, func.count(Session.id))
+                .join(Session, Session.hall_id == Hall.id)
+                .where(
+                    Hall.venue_id.in_(ids),
+                    Session.datetime >= now,
+                    Session.status.not_in(DEAD_SESSION_STATUSES),
+                )
+                .group_by(Hall.venue_id)
+            )
+        ).all():
+            per_venue[venue_id]["upcoming_sessions"] = count
+
+    rows = list(per_venue.values())
+    totals = blank()
+    for key in ("tickets_sold", "scanned", "revenue", "upcoming_sessions"):
+        totals[key] = sum(row[key] for row in rows)
+
+    # Counted afresh rather than summed: an event at two of the caller's venues
+    # is one event, not two.
+    events_query = select(func.count(Event.id))
+    clause = visible_events_clause(scope)
+    if clause is not None:
+        events_query = events_query.where(clause)
+    totals["events_count"] = await db.scalar(events_query) or 0
+
+    return {"totals": totals, "venues": rows}
 
 
 @router.get("/tickets", response_model=list[TicketOut])
 async def recent_tickets(
     limit: int = 20,
-    user: User = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    scope: VenueScope = Depends(get_current_venue_admin),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
-    """Latest tickets issued for this administrator's events."""
-    venue_ids = await _scope(db, user)
-    if venue_ids is not None and not venue_ids:
-        return []
+    """Latest tickets checked in at this administrator's venues.
 
+    Narrowed ticket by ticket, not event by event: an event that also runs at
+    another venue would otherwise show its buyers there as well.
+    """
     query = (
-        select(Ticket)
-        .join(Event, Event.id == Ticket.event_id)
+        scoped_tickets(select(Ticket), scope)
         .options(
             selectinload(Ticket.event),
             # serialize_ticket reads the hall name; a lazy load of it inside
@@ -115,7 +185,6 @@ async def recent_tickets(
         .order_by(Ticket.created_at.desc())
         .limit(max(1, min(limit, 100)))
     )
-    query = _narrow(query, venue_ids)
 
     result = await db.execute(query)
     return [ticket_service.serialize_ticket(t) for t in result.scalars().all()]
@@ -124,7 +193,7 @@ async def recent_tickets(
 @router.get("/staff", response_model=list[VenueStaffOut])
 async def my_staff(
     user: User = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Scanners on this administrator's venues.
 

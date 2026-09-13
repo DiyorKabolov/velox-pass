@@ -15,9 +15,8 @@ import VenuePage from './pages/VenuePage'
 import VenueAdminPanel from './pages/VenueAdminPanel'
 import Dashboard from './pages/admin/Dashboard'
 import AdminEvents from './pages/admin/Events'
-import AdminEventForm from './pages/admin/EventForm'
+import EventWizard from './pages/admin/EventWizard'
 import AdminVenues from './pages/admin/Venues'
-import AdminSessions from './pages/admin/Sessions'
 import AdminTickets from './pages/admin/Tickets'
 import AdminPdfTemplates from './pages/admin/PdfTemplates'
 import AdminUsers from './pages/admin/Users'
@@ -140,6 +139,17 @@ export default function App() {
               </VenueAdminRoute>
             }
           />
+          {/* The same wizard as the superadmin's. What it may create -- which
+              venues, which halls -- is narrowed by the backend, not by a
+              second copy of the page. */}
+          <Route
+            path="/venue-admin/events/new"
+            element={
+              <VenueAdminRoute>
+                <EventWizard />
+              </VenueAdminRoute>
+            }
+          />
 
           <Route
             path="/admin"
@@ -161,7 +171,7 @@ export default function App() {
             path="/admin/events/new"
             element={
               <AdminRoute>
-                <AdminEventForm />
+                <EventWizard />
               </AdminRoute>
             }
           />
@@ -173,13 +183,11 @@ export default function App() {
               </AdminRoute>
             }
           />
+          {/* The sessions tab is gone; its rows are the "по датам" view of the
+              events page. Kept as a redirect so a bookmark still lands on them. */}
           <Route
             path="/admin/sessions"
-            element={
-              <AdminRoute>
-                <AdminSessions />
-              </AdminRoute>
-            }
+            element={<Navigate to="/admin/events?view=dates" replace />}
           />
           <Route
             path="/admin/users"

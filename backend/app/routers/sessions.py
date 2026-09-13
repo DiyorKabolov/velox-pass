@@ -5,7 +5,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_current_user, require_staff, user_venue_ids
+from app.core.deps import VenueScope, get_current_user, require_staff, user_venue_ids
 from app.models.user import User
 from app.core.websocket_manager import manager
 from app.models.event import Event
@@ -15,6 +15,7 @@ from app.models.seat_price import SeatPrice
 from app.models.session import Session
 from app.models.ticket import Ticket
 from app.models.venue import Venue
+from app.services.access import require_event_access
 from fastapi import Query
 from app.schemas.session import (
     MAX_RECURRING_SESSIONS,
@@ -90,7 +91,7 @@ async def list_sessions(
     event_id: int | None = None,
     include_cancelled: bool = False,
     user: User = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Sessions for the staff screens, newest showing last."""
     query = (
@@ -125,7 +126,7 @@ async def list_sessions(
 async def create_session(
     data: SessionCreate,
     user: User = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> SessionOut | SessionGroupOut:
     """Create a showing plus its per-category prices, or a whole series of them.
 
@@ -144,6 +145,12 @@ async def create_session(
     allowed = await _allowed_venue_ids(db, user)
     if allowed is not None and hall.venue_id not in allowed:
         raise HTTPException(status_code=403, detail="Этот зал вам не назначен")
+
+    # Nor is holding the hall: the event is checked as well. A showing changes
+    # its event's capacity and schedule, so adding one to another venue's event
+    # -- even in a hall of your own -- would be editing somebody else's event.
+    scope = VenueScope(user, allowed or [], allowed is None)
+    await require_event_access(db, scope, event)
 
     # Last value wins if a category is listed twice.
     prices = {price.category: price.price for price in data.prices}
@@ -248,7 +255,7 @@ async def _create_series(
 
 
 @router.get("/{session_id}", response_model=SessionOut)
-async def get_session(session_id: int, db: AsyncSession = Depends(get_db)):
+async def get_session(session_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     session = await db.get(Session, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Сеанс не найден")
@@ -256,7 +263,7 @@ async def get_session(session_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{session_id}/seats", response_model=SeatMapOut)
-async def get_session_seats(session_id: int, db: AsyncSession = Depends(get_db)):
+async def get_session_seats(session_id: int, db: AsyncSession = Depends(get_db, scope="function")):
     """Seat map with live availability and the price of each seat."""
     session = await db.get(Session, session_id)
     if not session:
@@ -310,7 +317,7 @@ async def get_session_seats(session_id: int, db: AsyncSession = Depends(get_db))
 async def cancel_session(
     session_id: int,
     user: User = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Cancel a showing and tell every open seat map about it."""
     session = await db.get(Session, session_id)
@@ -338,7 +345,7 @@ async def cancel_session(
 async def cancel_session_group(
     group_id: str,
     user: User = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Cancel every remaining showing of one series."""
     sessions = list(

@@ -9,6 +9,7 @@ import SeatBookingModal from '../components/seats/SeatBookingModal'
 import { useBuyTicket } from '../hooks/useTickets'
 import useAuth from '../hooks/useAuth'
 import { formatDate, formatSessionStamp, isExpired } from '../utils/dates'
+import { bookableSessions, isEventOver } from '../utils/eventState'
 import { getCardColors } from '../utils/colors'
 import { orderTags, tagColor } from '../utils/eventTags'
 import { pluralize } from '../utils/plural'
@@ -62,7 +63,7 @@ export default function EventDetail() {
   }
 
   const colors = getCardColors(event)
-  const past = isExpired(event.date)
+  const past = isEventOver(event)
   const sold = event.tickets_sold ?? 0
   const tags = orderTags(event.tags)
 
@@ -93,7 +94,9 @@ export default function EventDetail() {
 
   // Exactly one showing, which needs no picking. Null whenever there is a
   // choice to make or nothing to choose from.
-  const onlySession = sessions?.length === 1 ? sessions[0] : null
+  // Only showings still ahead are offered; a passed one would just be refused.
+  const bookable = bookableSessions(sessions)
+  const onlySession = bookable.length === 1 ? bookable[0] : null
 
   const openSeatPicker = (session) => {
     if (requireSignIn()) return
@@ -194,8 +197,10 @@ export default function EventDetail() {
                     {onlySession ? 'Сеанс' : 'Выберите сеанс'}
                   </p>
 
-                  {!sessions?.length && (
-                    <p className="text-sm opacity-55">Сеансы пока не назначены.</p>
+                  {!bookable.length && (
+                    <p className="text-sm opacity-55">
+                      {sessions?.length ? 'Все сеансы уже прошли.' : 'Сеансы пока не назначены.'}
+                    </p>
                   )}
 
                   {/* One showing is not a choice: naming it and offering the
@@ -236,9 +241,9 @@ export default function EventDetail() {
                     </>
                   )}
 
-                  {sessions?.length > 1 && (
+                  {bookable.length > 1 && (
                     <SessionPicker
-                      sessions={sessions}
+                      sessions={bookable}
                       colors={colors}
                       disabled={past}
                       selectedId={pickingSession?.id ?? null}

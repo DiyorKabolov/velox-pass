@@ -21,7 +21,9 @@ class EventCreate(BaseModel):
     description: str | None = None
     date: datetime
     location: str | None = None
-    capacity: int = 0
+    capacity: int = Field(default=0, ge=0)
+    # Only meaningful without seats; seated events price per session category.
+    price: float = Field(default=0, ge=0)
     has_seats: bool = False
     venue_id: int | None = None
     card_bg: str = "#fdfdf5"
@@ -37,7 +39,8 @@ class EventUpdate(BaseModel):
     description: str | None = None
     date: datetime | None = None
     location: str | None = None
-    capacity: int | None = None
+    capacity: int | None = Field(default=None, ge=0)
+    price: float | None = Field(default=None, ge=0)
     has_seats: bool | None = None
     venue_id: int | None = None
     card_bg: str | None = None
@@ -57,8 +60,10 @@ class EventOut(BaseModel):
     date: datetime
     location: str | None
     capacity: int
+    price: float = 0
     has_seats: bool
     venue_id: int | None
+    created_by: int | None = None
     card_bg: str
     card_accent: str
     card_text: str
@@ -81,6 +86,11 @@ class EventOut(BaseModel):
     # How many live showings those seats are spread over. 0 for an unseated
     # event, which has no showings at all.
     sessions_count: int = 0
+    # When the event is over: its last live showing, or its own date when it
+    # has none. `date` is when it starts -- for a series, the first showing --
+    # and deciding "finished" by it ended a whole run after its first night.
+    ends_at: datetime | None = None
+    is_over: bool = False
 
     @field_validator("tags", mode="before")
     @classmethod

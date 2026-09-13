@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { CalendarPlus, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { getAdminEvents } from '../../api/admin'
 import {
@@ -18,12 +18,27 @@ import Button from '../../components/ui/Button'
 import Modal from '../../components/ui/Modal'
 import EventEditor from '../../components/admin/EventEditor'
 import EventSessions from '../../components/admin/EventSessions'
+import SessionDialog from '../../components/admin/SessionDialog'
+import SessionsByDate from '../../components/admin/SessionsByDate'
+import { emptySessionForm } from '../../components/admin/sessionForm'
 import { toFormValue, toPayload, validate } from '../../components/admin/eventForm'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
+
+// The two ways of looking at the same rows: by what is being shown, or by
+// when it is on.
+const VIEWS = [
+  { key: 'events', label: 'По мероприятиям' },
+  { key: 'dates', label: 'По датам' },
+]
 
 export default function Events() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+
+  // Kept in the address bar, so a view can be linked to -- /admin/sessions
+  // still exists as a bookmark and now lands here.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view = searchParams.get('view') === 'dates' ? 'dates' : 'events'
 
   const { data: events, isLoading } = useQuery({
     queryKey: ['admin', 'events'],
@@ -35,6 +50,16 @@ export default function Events() {
   // Ids of the rows showing their sessions. A set rather than a single id, so
   // two events can be compared side by side.
   const [expanded, setExpanded] = useState(() => new Set())
+
+  // null = closed. Otherwise the session form; `lockedEvent` is set when it
+  // was opened from an event's own row, where there is nothing to choose.
+  const [scheduling, setScheduling] = useState(null)
+
+  const openScheduler = (event = null) =>
+    setScheduling({
+      lockedEvent: event,
+      form: emptySessionForm({ eventId: event ? String(event.id) : '' }),
+    })
 
   const toggle = (eventId) =>
     setExpanded((current) => {
@@ -99,17 +124,56 @@ export default function Events() {
 
   return (
     <AdminLayout
-      title="Мероприятия"
-      subtitle="Создание, редактирование и удаление мероприятий афиши."
+      title="Афиша"
+      subtitle="Мероприятия и их сеансы в одном месте."
       action={
-        <Button onClick={() => navigate('/admin/events/new')} className="shrink-0">
-          <Plus size={15} />
-          Новое мероприятие
-        </Button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button variant="ghost" onClick={() => openScheduler()}>
+            <CalendarPlus size={15} />
+            Новый сеанс
+          </Button>
+          <Button onClick={() => navigate('/admin/events/new')}>
+            <Plus size={15} />
+            Новое мероприятие
+          </Button>
+        </div>
       }
     >
+      <div
+        role="radiogroup"
+        aria-label="Как показывать"
+        className="mb-5 inline-flex gap-1 rounded-[var(--radius-sm)] border border-[var(--border)] p-1"
+      >
+        {VIEWS.map((option) => {
+          const active = view === option.key
+          return (
+            <button
+              key={option.key}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() =>
+                setSearchParams(option.key === 'dates' ? { view: 'dates' } : {}, {
+                  replace: true,
+                })
+              }
+              className={[
+                'rounded-[6px] px-3.5 py-1.5 text-xs transition-all duration-150',
+                active
+                  ? 'bg-[var(--accent)] font-medium text-[var(--bg)]'
+                  : 'text-[var(--muted)] hover:text-[var(--text)]',
+              ].join(' ')}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+
       {isLoading ? (
         <div className="h-48 animate-pulse rounded-[var(--radius)] bg-[var(--surface)]" />
+      ) : view === 'dates' ? (
+        <SessionsByDate events={events} />
       ) : (
         <TableShell>
           <thead>
@@ -157,14 +221,16 @@ export default function Events() {
                     </Td>
                     <Td className="text-[var(--muted)]">{event.location || '—'}</Td>
                     <Td className="text-right font-mono2 text-xs whitespace-nowrap">
-                      {capacityLabel(event)}
-                      {/* Seated events keep no capacity of their own; it is the sum
-                          over their showings, which is worth stating. */}
+                      {/* Ahead of the numbers, not after them: the pair reads
+                          as one figure and a note tacked on its right split it
+                          in two. Seated events keep no capacity of their own --
+                          it is the sum over these showings. */}
                       {event.has_seats && sessionsLabel(event) && (
-                        <span className="ml-1.5 text-[10px] text-[var(--muted2)]">
-                          ({sessionsLabel(event)})
+                        <span className="mr-2 text-[10px] text-[var(--muted2)]">
+                          {sessionsLabel(event)}
                         </span>
                       )}
+                      {capacityLabel(event)}
                     </Td>
                     <Td className="text-right font-mono2 text-xs">
                       {availableLabel(event)}
@@ -208,6 +274,12 @@ export default function Events() {
                           columns of its own and would not fit theirs. */}
                       <Td colSpan={7} className="bg-[var(--bg)] p-3">
                         <EventSessions eventId={event.id} />
+                        <div className="mt-2 flex justify-end">
+                          <Button size="sm" variant="ghost" onClick={() => openScheduler(event)}>
+                            <CalendarPlus size={13} />
+                            Добавить сеанс
+                          </Button>
+                        </div>
                       </Td>
                     </tr>
                   )}
@@ -223,6 +295,16 @@ export default function Events() {
             )}
           </tbody>
         </TableShell>
+      )}
+
+      {scheduling && (
+        <SessionDialog
+          form={scheduling.form}
+          lockedEvent={scheduling.lockedEvent}
+          events={events}
+          onChange={(form) => setScheduling((current) => ({ ...current, form }))}
+          onClose={() => setScheduling(null)}
+        />
       )}
 
       <Modal

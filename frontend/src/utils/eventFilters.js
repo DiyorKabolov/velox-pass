@@ -1,3 +1,4 @@
+import { eventEndsAt, isEventOver } from './eventState'
 /**
  * Filtering and sorting for the listing page. Kept apart from the page so the
  * rules are testable on their own and the component stays about layout.
@@ -90,12 +91,15 @@ export function matchesDate(event, filter, now = Date.now()) {
   if (filter === 'all') return true
   const at = time(event.date)
   if (at === null) return false
+  // A series runs from its first showing to its last; it belongs to any
+  // window it overlaps, not only to the one its first night falls in.
+  const until = time(eventEndsAt(event)) ?? at
 
   const from = startOfToday(now)
   const spans = { today: DAY, week: 7 * DAY, month: 30 * DAY }
   const span = spans[filter]
   if (!span) return true
-  return at >= from && at < from + span
+  return at < from + span && until >= from
 }
 
 /**
@@ -106,8 +110,7 @@ export function matchesDate(event, filter, now = Date.now()) {
  */
 export function matchesStatus(event, filter, now = Date.now()) {
   if (filter === 'all') return true
-  const at = time(event.date)
-  const past = at !== null && at < now
+  const past = isEventOver(event, now)
   if (filter === 'finished') return past
   if (filter === 'available') return !past && !isSoldOut(event)
   return true

@@ -22,7 +22,13 @@ function Caption({ children }) {
  * from the rule with the same walk the backend performs, so the number shown
  * here is the number that gets created.
  */
-export default function RecurrenceEditor({ value, onChange }) {
+export default function RecurrenceEditor({
+  value,
+  onChange,
+  // What each moment becomes. A showing in a hall, usually; an event of its
+  // own when the series has no hall to hang showings on.
+  noun = ['сеанс', 'сеанса', 'сеансов'],
+}) {
   const set = (patch) => onChange({ ...value, ...patch })
 
   const toggleDay = (day) =>
@@ -190,7 +196,7 @@ export default function RecurrenceEditor({ value, onChange }) {
         ) : (
           <>
             <p className="text-sm text-[var(--text)]">
-              Будет создано {pluralize(moments.length, 'сеанс', 'сеанса', 'сеансов')}
+              Будет создано {pluralize(moments.length, ...noun)}
             </p>
             <ul className="mt-2 space-y-0.5 font-mono2 text-xs text-[var(--muted)]">
               {moments.slice(0, 5).map((moment) => (

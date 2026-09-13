@@ -2,6 +2,7 @@ import { ArrowRight, CalendarDays, MapPin } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { formatDate, isExpired } from '../../utils/dates'
+import { isEventOver } from '../../utils/eventState'
 import { getCardColors } from '../../utils/colors'
 import { orderTags, tagColor } from '../../utils/eventTags'
 import { pluralize } from '../../utils/plural'
@@ -61,7 +62,7 @@ const plainBackdrop = (accent) =>
 
 export default function EventCard({ event }) {
   const colors = getCardColors(event)
-  const past = isExpired(event.date)
+  const past = isEventOver(event)
   const sold = event.tickets_sold ?? 0
   const tags = orderTags(event.tags)
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class VenueCreate(BaseModel):
@@ -40,6 +40,32 @@ class VenueOut(BaseModel):
     next_session_at: datetime | None = None
 
 
+def _check_layout(value):
+    """Refuse a seat layout the server could not build seats from.
+
+    The column is free-form JSON, and seats_for_layout reads each cell as an
+    object; a cell that was a bare string reached it unchecked and came back as
+    a 500. Cells may be null (an empty spot), never anything else.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("Схема зала должна быть объектом")
+    grid = value.get("seats")
+    if grid is None:
+        return value
+    if not isinstance(grid, list) or not all(isinstance(row, list) for row in grid):
+        raise ValueError("seats — это список рядов, каждый ряд — список мест")
+    for row_index, row in enumerate(grid, start=1):
+        for col_index, cell in enumerate(row, start=1):
+            if cell is not None and not isinstance(cell, dict):
+                raise ValueError(
+                    f"Место {row_index}:{col_index} должно быть объектом вида "
+                    '{"category": "standard"}'
+                )
+    return value
+
+
 class HallCreate(BaseModel):
     venue_id: int
     name: str = Field(min_length=1, max_length=255)
@@ -48,12 +74,16 @@ class HallCreate(BaseModel):
     # {"seats": [[{"category": "standard", "is_aisle": false}, ...], ...]}
     layout_json: dict[str, Any] | None = None
 
+    _layout = field_validator("layout_json", mode="before")(_check_layout)
+
 
 class HallUpdate(BaseModel):
     name: str | None = None
     rows: int | None = Field(default=None, ge=0, le=200)
     cols: int | None = Field(default=None, ge=0, le=200)
     layout_json: dict[str, Any] | None = None
+
+    _layout = field_validator("layout_json", mode="before")(_check_layout)
 
 
 class SeatOut(BaseModel):

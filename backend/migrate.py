@@ -62,6 +62,24 @@ COLUMNS = [
         "CREATE INDEX IF NOT EXISTS ix_sessions_recurring_group_id "
         "ON sessions (recurring_group_id)",
     ),
+    (
+        # Who made the event. A venue administrator's own events are theirs to
+        # manage even before a showing ties them to one of their halls. SET NULL,
+        # so removing an account does not take its events down with it.
+        "events",
+        "created_by",
+        "ALTER TABLE events ADD COLUMN created_by INTEGER "
+        "REFERENCES users(id) ON DELETE SET NULL; "
+        "CREATE INDEX IF NOT EXISTS ix_events_created_by ON events (created_by)",
+    ),
+    (
+        # The ticket price of an event without seats. Seated events price per
+        # category on each session instead, so this stays 0 for them. Existing
+        # rows get 0, which is what their tickets were actually sold for.
+        "events",
+        "price",
+        "ALTER TABLE events ADD COLUMN price NUMERIC(10, 2) NOT NULL DEFAULT 0",
+    ),
 ]
 
 # Whole tables added after the first build. create_all would make these, but it

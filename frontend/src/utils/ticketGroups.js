@@ -1,3 +1,4 @@
+import { ticketStartsAt } from './eventState'
 /**
  * Grouping, counting and searching for the admin ticket list. Kept out of the
  * page so the rules can be tested on their own.
@@ -6,7 +7,9 @@
 /** 'ok' | 'used' | 'expired' — the same three states the ticket card shows. */
 export function ticketState(ticket, now = Date.now()) {
   if (ticket.used) return 'used'
-  const at = ticket.event_date ? new Date(ticket.event_date).getTime() : null
+  // The showing's time, not the event's: a series shares its first night's date.
+  const startsAt = ticketStartsAt(ticket)
+  const at = startsAt ? new Date(startsAt).getTime() : null
   if (at !== null && !Number.isNaN(at) && at < now) return 'expired'
   return 'ok'
 }
@@ -104,9 +107,12 @@ export function matchesTicket(ticket, buyer, query) {
     .some((field) => String(field).toLowerCase().includes(needle))
 }
 
-/** "1 200 ₽", or a dash for a ticket that was issued without a price. */
+/** "1 200 сомони", or a dash for a ticket that was issued without a price.
+ *
+ *  The one place the currency is written, so every price on the site -- the
+ *  cabinet, the admin tables, the session picker -- changes together. */
 export function formatPrice(value) {
   const amount = Number(value) || 0
   if (!amount) return '—'
-  return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`
+  return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} сомони`
 }

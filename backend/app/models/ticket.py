@@ -41,7 +41,10 @@ class Ticket(Base):
     user = relationship("User", back_populates="tickets")
     event = relationship("Event", back_populates="tickets")
     seat = relationship("Seat", back_populates="tickets")
-    session = relationship("Session", back_populates="tickets")
+    # Always loaded with the ticket: when a ticket is valid depends on its
+    # showing, not on the event, and an unloaded relationship read inside
+    # async code raises MissingGreenlet instead of loading.
+    session = relationship("Session", back_populates="tickets", lazy="selectin")
 
     def __repr__(self) -> str:
         return f"<Ticket {self.ticket_id}>"

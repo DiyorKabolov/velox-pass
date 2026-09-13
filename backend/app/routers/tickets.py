@@ -17,7 +17,7 @@ router = APIRouter(prefix="/tickets", tags=["tickets"])
 @router.get("/my", response_model=list[TicketOut])
 async def my_tickets(
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     tickets = await ticket_service.get_user_tickets(db, user.id)
     return [ticket_service.serialize_ticket(t) for t in tickets]
@@ -27,7 +27,7 @@ async def my_tickets(
 async def buy_ticket(
     data: TicketCreate,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """Issue a ticket for the current user."""
     ticket = await ticket_service.generate_ticket(
@@ -62,7 +62,7 @@ async def _owned_ticket(db: AsyncSession, ticket_id: str, user: User):
 async def get_ticket(
     ticket_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     ticket = await _owned_ticket(db, ticket_id, user)
     return ticket_service.serialize_ticket(ticket)
@@ -72,7 +72,7 @@ async def get_ticket(
 async def ticket_qr(
     ticket_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     """PNG QR image for the ticket card."""
     ticket = await _owned_ticket(db, ticket_id, user)
@@ -87,7 +87,7 @@ async def ticket_qr(
 async def ticket_pdf(
     ticket_id: str,
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     ticket = await _owned_ticket(db, ticket_id, user)
 

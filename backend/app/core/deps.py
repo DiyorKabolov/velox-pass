@@ -25,7 +25,7 @@ ROLE_RANK = {"user": 0, "scanner": 1, "venue_admin": 2, "superadmin": 3}
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> User:
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -81,6 +81,11 @@ require_scanner = require_min_rank("scanner")
 # above every other role in ROLE_RANK.
 get_current_scanner = require_role("scanner")
 
+# The door: scanners, and venue administrators, who run their own entrance.
+# Passing this says nothing about *which* tickets may be checked -- that is
+# scanner_venue_ids, applied per ticket.
+get_current_door_staff = require_role("scanner", "venue_admin")
+
 
 async def user_venue_ids(db: AsyncSession, user: User, role: str | None = None) -> list[int]:
     """Venues the user has a scoped grant for, optionally narrowed to one role."""
@@ -88,6 +93,24 @@ async def user_venue_ids(db: AsyncSession, user: User, role: str | None = None) 
     if role:
         query = query.where(UserVenueRole.role == role)
     result = await db.execute(query)
+    return [row[0] for row in result.all()]
+
+
+async def scanner_venue_ids(db: AsyncSession, user: User) -> list[int] | None:
+    """Venues whose tickets this account may check in, or None for any venue.
+
+    A scanner grant and a venue_admin grant both count. The global role alone
+    counts for nothing: a scanner with no venue assigned checks no tickets,
+    rather than every ticket in the system.
+    """
+    if user.role == "superadmin":
+        return None
+    result = await db.execute(
+        select(UserVenueRole.venue_id).where(
+            UserVenueRole.user_id == user.id,
+            UserVenueRole.role.in_(("scanner", "venue_admin")),
+        )
+    )
     return [row[0] for row in result.all()]
 
 
@@ -124,7 +147,7 @@ class VenueScope:
 
 async def get_current_venue_admin(
     user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> VenueScope:
     """Venues this account may manage.
 
