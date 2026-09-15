@@ -5,11 +5,17 @@ export async function getMyTickets() {
   return data
 }
 
-export async function buyTicket({ eventId, sessionId = null, seatId = null }) {
+/**
+ * Place one order. `seatIds` for a seated event -- a ticket per seat -- or
+ * `quantity` for one without seats. Resolves to the list of tickets issued,
+ * all of them or, if anything was refused, none.
+ */
+export async function buyTicket({ eventId, sessionId = null, seatIds = [], quantity = null }) {
   const { data } = await client.post('/tickets', {
     event_id: eventId,
     session_id: sessionId,
-    seat_id: seatId,
+    seats: seatIds,
+    quantity,
   })
   return data
 }

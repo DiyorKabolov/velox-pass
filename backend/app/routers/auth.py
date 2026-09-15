@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.security import hash_password, verify_password
 from app.models.user import User
 from app.schemas.user import (
+    PasswordChange,
+    ProfileUpdate,
     ResendRequest,
     Token,
     UserCreate,
@@ -57,3 +62,50 @@ async def resend(data: ResendRequest, db: AsyncSession = Depends(get_db, scope="
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.patch("/profile", response_model=UserOut)
+async def update_profile(
+    data: ProfileUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db, scope="function"),
+):
+    """Change the username. The session survives it: tokens carry the id."""
+    if data.username is not None:
+        name = data.username.strip()
+        if len(name) < 3:
+            raise HTTPException(status_code=422, detail="Никнейм — от 3 символов")
+        # Sign-in accepts a username or an e-mail in one field; a name with @
+        # in it could be mistaken for somebody's address.
+        if "@" in name:
+            raise HTTPException(status_code=422, detail="Никнейм не может содержать @")
+        if name != user.username:
+            clash = await db.scalar(
+                select(User.id).where(
+                    func.lower(User.username) == name.lower(), User.id != user.id
+                )
+            )
+            if clash:
+                raise HTTPException(status_code=409, detail="Этот никнейм уже занят")
+            user.username = name
+            try:
+                await db.flush()
+            except IntegrityError:
+                raise HTTPException(status_code=409, detail="Этот никнейм уже занят") from None
+    await db.refresh(user)
+    return UserOut.model_validate(user)
+
+
+@router.patch("/password")
+async def change_password(
+    data: PasswordChange,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db, scope="function"),
+):
+    if not verify_password(data.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Текущий пароль неверен")
+    if verify_password(data.new_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Новый пароль совпадает с текущим")
+    user.password_hash = hash_password(data.new_password)
+    await db.flush()
+    return {"message": "Пароль изменён"}

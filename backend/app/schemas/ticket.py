@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TicketOut(BaseModel):
@@ -31,11 +31,29 @@ class TicketOut(BaseModel):
     card_accent: str | None = None
     card_text: str | None = None
 
+    # A gift: who gave it, what they wrote, and whether it has been accepted.
+    gifted_by: int | None = None
+    gifted_by_username: str | None = None
+    gift_message: str | None = None
+    gift_status: str | None = None
+
 
 class TicketCreate(BaseModel):
+    """One order. `seats` for a seated event -- a ticket per seat -- or
+    `quantity` for one without seats."""
+
     event_id: int
     session_id: int | None = None
+    seats: list[int] = []
+    quantity: int | None = Field(default=None, ge=1)
+    # The single-seat form the app sent before orders held several.
     seat_id: int | None = None
+
+    @model_validator(mode="after")
+    def _fold_single_seat(self) -> "TicketCreate":
+        if self.seat_id is not None and not self.seats:
+            self.seats = [self.seat_id]
+        return self
 
 
 class ScanRequest(BaseModel):
@@ -46,7 +64,7 @@ class ScanResult(BaseModel):
     """Scanner verdict. `ok` is true only on the first valid scan."""
 
     ok: bool
-    status: str  # ok | used | expired | invalid
+    status: str  # ok | used | expired | invalid | wrong_venue | gift_pending
     message: str
     used_at: datetime | None = None
     ticket: TicketOut | None = None

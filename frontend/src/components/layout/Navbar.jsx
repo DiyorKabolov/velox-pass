@@ -3,16 +3,15 @@ import {
   CalendarDays,
   Camera,
   LayoutDashboard,
-  LogOut,
   Store,
   Ticket,
-  User,
   Users,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import useAuth from '../../hooks/useAuth'
+import UserMenu from './UserMenu'
 
 const PILL_SPRING = { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }
 
@@ -122,21 +121,7 @@ export default function Navbar() {
 
         <div className="ml-1 flex shrink-0 items-center gap-2 border-l border-[var(--border)] pl-2 sm:ml-2 sm:pl-3">
           {isAuthenticated ? (
-            <>
-              <span className="hidden items-center gap-1.5 whitespace-nowrap text-sm text-[var(--muted)] md:inline-flex">
-                <User size={14} />
-                {user?.username}
-              </span>
-              <button
-                type="button"
-                onClick={handleLogout}
-                title="Выйти"
-                aria-label="Выйти"
-                className="rounded-[var(--radius-sm)] border border-[var(--border)] p-2 text-[var(--muted)] transition-all duration-150 hover:border-[var(--err)] hover:text-[var(--err)] active:scale-[0.92]"
-              >
-                <LogOut size={14} />
-              </button>
-            </>
+            <UserMenu user={user} onLogout={handleLogout} />
           ) : (
             <>
               <Link

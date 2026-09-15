@@ -23,30 +23,32 @@ async def my_tickets(
     return [ticket_service.serialize_ticket(t) for t in tickets]
 
 
-@router.post("", response_model=TicketOut, status_code=201)
-async def buy_ticket(
+@router.post("", response_model=list[TicketOut], status_code=201)
+async def buy_tickets(
     data: TicketCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db, scope="function"),
 ):
-    """Issue a ticket for the current user."""
-    ticket = await ticket_service.generate_ticket(
-        db, user, data.event_id, data.session_id, data.seat_id
+    """Issue an order for the current user: a ticket per seat, or several
+    without seats. Always a list, even for one."""
+    tickets = await ticket_service.generate_tickets(
+        db, user, data.event_id, data.session_id, data.seats, data.quantity
     )
 
-    # Push the seat to everyone watching this session's map.
-    if ticket.session_id and ticket.seat:
-        await manager.broadcast_to_session(
-            ticket.session_id,
-            {
-                "type": "seat_taken",
-                "seat_id": ticket.seat.id,
-                "row": ticket.seat.row,
-                "col": ticket.seat.col,
-            },
-        )
+    # Push the seats to everyone watching this session's map.
+    for ticket in tickets:
+        if ticket.session_id and ticket.seat:
+            await manager.broadcast_to_session(
+                ticket.session_id,
+                {
+                    "type": "seat_taken",
+                    "seat_id": ticket.seat.id,
+                    "row": ticket.seat.row,
+                    "col": ticket.seat.col,
+                },
+            )
 
-    return ticket_service.serialize_ticket(ticket)
+    return [ticket_service.serialize_ticket(ticket) for ticket in tickets]
 
 
 async def _owned_ticket(db: AsyncSession, ticket_id: str, user: User):
@@ -55,6 +57,11 @@ async def _owned_ticket(db: AsyncSession, ticket_id: str, user: User):
         raise HTTPException(status_code=404, detail="Билет не найден")
     if ticket.user_id != user.id and user.role != "superadmin":
         raise HTTPException(status_code=403, detail="Этот билет принадлежит другому пользователю")
+    if ticket.gift_status == "pending" and user.role != "superadmin":
+        # No QR and no PDF for a gift nobody has accepted: the recipient
+        # could keep the code and decline, and the ticket would go back
+        # to its giver already copied.
+        raise HTTPException(status_code=403, detail="Сначала примите подарок")
     return ticket
 
 

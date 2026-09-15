@@ -26,7 +26,12 @@ class User(Base):
         nullable=False,
     )
 
-    tickets = relationship("Ticket", back_populates="user", cascade="all, delete-orphan")
+    tickets = relationship(
+        "Ticket",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="Ticket.user_id",
+    )
     venue_roles = relationship(
         "UserVenueRole", back_populates="user", cascade="all, delete-orphan"
     )

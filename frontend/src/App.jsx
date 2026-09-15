@@ -5,6 +5,8 @@ import useAuth, { useSyncUser } from './hooks/useAuth'
 import Cabinet from './pages/Cabinet'
 import Confirm from './pages/Confirm'
 import FriendInvite from './pages/FriendInvite'
+import GiftRespond from './pages/GiftRespond'
+import Profile from './pages/Profile'
 import Friends from './pages/Friends'
 import EventDetail from './pages/EventDetail'
 import Home from './pages/Home'
@@ -134,6 +136,16 @@ export default function App() {
           {/* Public: the links in an invitation e-mail land here, and the
               person answering may not be signed in. */}
           <Route path="/friends/respond" element={<FriendInvite />} />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          {/* Public, for the same reason as the friend invitation page. */}
+          <Route path="/gifts/respond" element={<GiftRespond />} />
 
           <Route
             path="/scanner"

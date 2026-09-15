@@ -2,7 +2,7 @@
 import secrets
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import (
@@ -26,7 +26,12 @@ async def get_user_by_login(db: AsyncSession, login: str) -> User | None:
 async def register_user(db: AsyncSession, data: UserCreate) -> tuple[User, bool]:
     existing = await db.execute(
         select(User).where(
-            or_(User.username == data.username, User.email == data.email)
+            # Case-insensitive, like every lookup by name: 'Bob' and 'bob'
+            # would otherwise be two accounts a friend request cannot tell apart.
+            or_(
+                func.lower(User.username) == data.username.lower(),
+                User.email == data.email,
+            )
         )
     )
     if existing.scalar_one_or_none():

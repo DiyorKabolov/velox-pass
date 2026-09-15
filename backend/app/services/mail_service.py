@@ -193,3 +193,109 @@ def send_friend_request_email(
             Если вы не знаете этого человека, просто проигнорируйте письмо.
           </p>"""
     return _send(to_email, subject, text, _shell(inner))
+
+
+def _paragraphs(text: str) -> str:
+    """Escaped, with line breaks kept -- a gift message may run to several."""
+    return "<br>".join(html.escape(line) for line in text.splitlines())
+
+
+def send_gift_email(
+    to_email: str,
+    sender_username: str,
+    message: str | None,
+    event_title: str,
+    when_text: str,
+    location: str | None,
+    accept_url: str,
+    decline_url: str,
+) -> bool:
+    """Tell someone a friend has given them a ticket.
+
+    Every string here but the links is written by a user -- the sender's name,
+    their message, the event's title and address -- so all of it is escaped
+    before it reaches the HTML, and the subject loses any line breaks.
+    """
+    sender = " ".join(sender_username.split())
+    title = " ".join(event_title.split())
+    subject = f"{sender} дарит вам билет на {title}!"
+
+    details = " · ".join(part for part in (when_text, location) if part)
+    text = (
+        "Вам подарили билет!\n\n"
+        + (f"{sender}: {message}\n\n" if message else f"От: {sender}\n\n")
+        + f"{title}\n{details}\n\n"
+        + f"Принять подарок: {accept_url}\n"
+        + f"Отклонить: {decline_url}\n"
+    )
+
+    quote_block = (
+        f"""<div style="background:{BG};border-left:3px solid #fbbf24;border-radius:6px;
+                        padding:14px 16px;margin:0 0 20px;font-size:15px;line-height:1.6;color:{TEXT};">
+              <strong style="color:#fbbf24;">{html.escape(sender)}:</strong>
+              {_paragraphs(message)}
+            </div>"""
+        if message
+        else f"""<p style="margin:0 0 20px;font-size:15px;color:{MUTED};">
+              От: <strong style="color:{TEXT};">{html.escape(sender)}</strong></p>"""
+    )
+    inner = f"""
+          <p style="margin:0 0 4px;font-size:12px;letter-spacing:3px;color:#fbbf24;">
+            VELOX&middot;PASS
+          </p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:600;color:{TEXT};">
+            &#127873; Вам подарили билет!
+          </h1>
+          {quote_block}
+          <div style="border:1px solid {BORDER};border-radius:10px;padding:16px;margin:0 0 24px;">
+            <p style="margin:0 0 6px;font-size:17px;font-weight:600;color:{TEXT};">{html.escape(title)}</p>
+            <p style="margin:0;font-size:14px;color:{MUTED};">{html.escape(details)}</p>
+          </div>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+            <tr>
+              <td style="padding-right:12px;">
+                <a href="{html.escape(accept_url, quote=True)}"
+                   style="display:inline-block;padding:12px 26px;border-radius:8px;
+                          background:#fbbf24;color:{BG};font-size:15px;font-weight:600;
+                          text-decoration:none;">Принять подарок</a>
+              </td>
+              <td>
+                <a href="{html.escape(decline_url, quote=True)}"
+                   style="display:inline-block;padding:11px 25px;border-radius:8px;
+                          border:1px solid {BORDER};color:{MUTED};font-size:15px;
+                          text-decoration:none;">Отклонить</a>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:0;font-size:13px;line-height:1.6;color:{MUTED};">
+            Если отклонить, билет вернётся к {html.escape(sender)}.
+          </p>"""
+    return _send(to_email, subject, text, _shell(inner))
+
+
+def send_gift_declined_email(to_email: str, recipient_username: str, event_title: str) -> bool:
+    """Tell the giver their gift came back, and that the ticket is theirs again."""
+    recipient = " ".join(recipient_username.split())
+    title = " ".join(event_title.split())
+    subject = "Ваш подарок был отклонён"
+    text = (
+        f"{recipient} отклонил(а) билет на {title}.\n\n"
+        "Билет вернулся к вам и снова в разделе «Мои билеты». "
+        "Его код обновлён — скачайте PDF заново.\n"
+    )
+    inner = f"""
+          <p style="margin:0 0 4px;font-size:12px;letter-spacing:3px;color:{ACCENT};">
+            VELOX&middot;PASS
+          </p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:600;color:{TEXT};">
+            Ваш подарок был отклонён
+          </h1>
+          <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:{MUTED};">
+            <strong style="color:{TEXT};">{html.escape(recipient)}</strong> отклонил(а) билет на
+            <strong style="color:{TEXT};">{html.escape(title)}</strong>.
+          </p>
+          <p style="margin:0;font-size:14px;line-height:1.6;color:{MUTED};">
+            Билет вернулся к вам и снова в разделе «Мои билеты». Его код обновлён —
+            если вы скачивали PDF, скачайте его заново.
+          </p>"""
+    return _send(to_email, subject, text, _shell(inner))

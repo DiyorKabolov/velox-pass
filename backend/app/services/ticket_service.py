@@ -10,7 +10,8 @@ from reportlab.lib.pagesizes import A6
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas as pdf_canvas
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -75,6 +76,10 @@ def serialize_ticket(ticket: Ticket) -> TicketOut:
         card_bg=event.card_bg if event else None,
         card_accent=event.card_accent if event else None,
         card_text=event.card_text if event else None,
+        gifted_by=ticket.gifted_by,
+        gifted_by_username=ticket.gifter.username if ticket.gifter is not None else None,
+        gift_message=ticket.gift_message,
+        gift_status=ticket.gift_status,
     )
 
 
@@ -97,17 +102,41 @@ async def _resolve_price(
     return float(price.price) if price else 0.0
 
 
-async def generate_ticket(
+# One order can hold many tickets, but not an unbounded number: an event with no
+# capacity set would otherwise accept a request for a million rows.
+MAX_TICKETS_PER_ORDER = 100
+
+
+def _with_relations(query):
+    return query.options(
+        selectinload(Ticket.event),
+        # .hall as well: serialize_ticket reads the hall name, and a lazy
+        # load of it inside async code raises MissingGreenlet.
+        selectinload(Ticket.seat).selectinload(Seat.hall),
+    )
+
+
+async def generate_tickets(
     db: AsyncSession,
     user: User,
     event_id: int,
     session_id: int | None = None,
-    seat_id: int | None = None,
-) -> Ticket:
-    event = await db.get(Event, event_id)
+    seat_ids: list[int] | None = None,
+    quantity: int | None = None,
+) -> list[Ticket]:
+    """Issue a whole order: a ticket per seat, or `quantity` tickets without seats.
+
+    All of it or none of it. Every check runs before anything is written, and a
+    failure after that -- a seat taken by someone else in the same instant --
+    raises, which rolls the request's transaction back with every ticket in it.
+    """
+    # Locks the event row, so orders for one event are settled one at a time:
+    # two buyers counting the remaining capacity at once would both see room.
+    event = await db.get(Event, event_id, with_for_update=True)
     if not event:
         raise HTTPException(status_code=404, detail="Мероприятие не найдено")
 
+    session = None
     if session_id is not None:
         # Nothing stopped a ticket being sold for a showing that had already
         # happened, been cancelled, or belonged to another event entirely.
@@ -121,58 +150,126 @@ async def generate_ticket(
         if session.status == "finished" or session.datetime < datetime.now(timezone.utc):
             raise HTTPException(status_code=409, detail="Этот сеанс уже прошёл")
 
-    seat: Seat | None = None
+    tickets: list[Ticket] = []
     if event.has_seats:
-        if session_id is None:
+        if session is None:
             raise HTTPException(status_code=400, detail="Выберите сеанс")
-        if not seat_id:
+        wanted = list(seat_ids or [])
+        if not wanted:
             raise HTTPException(
                 status_code=400, detail="Для этого мероприятия нужно выбрать место"
             )
-        seat = await db.get(Seat, seat_id)
-        if not seat or seat.is_aisle:
-            raise HTTPException(status_code=400, detail="Место недоступно")
-
-        taken = await db.execute(
-            select(Ticket).where(
-                Ticket.seat_id == seat_id, Ticket.session_id == session_id
-            )
-        )
-        if taken.scalar_one_or_none():
+        if len(set(wanted)) != len(wanted):
+            raise HTTPException(status_code=400, detail="Одно место выбрано дважды")
+        if len(wanted) > MAX_TICKETS_PER_ORDER:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Место уже занято"
+                status_code=400,
+                detail=f"За один раз можно купить не больше {MAX_TICKETS_PER_ORDER} билетов",
             )
-    elif event.capacity:
-        sold = await db.scalar(
-            select(func.count(Ticket.id)).where(Ticket.event_id == event_id)
-        )
-        if (sold or 0) >= event.capacity:
-            raise HTTPException(status_code=409, detail="Мест нет")
 
-    ticket = Ticket(
-        ticket_id=new_ticket_id(),
-        user_id=user.id,
-        event_id=event_id,
-        seat_id=seat.id if seat else None,
-        session_id=session_id,
-        used=False,
-        price_paid=await _resolve_price(db, event, session_id, seat),
-    )
-    db.add(ticket)
-    await db.flush()
+        seats = {
+            seat.id: seat
+            for seat in (await db.execute(select(Seat).where(Seat.id.in_(wanted)))).scalars()
+        }
+        for seat_id in wanted:
+            seat = seats.get(seat_id)
+            # The hall is checked too: nothing used to stop a seat from another
+            # hall being sold for this showing.
+            if seat is None or seat.is_aisle or seat.hall_id != session.hall_id:
+                raise HTTPException(status_code=400, detail="Место недоступно")
 
-    # Reload with relations so serialization happens in one place.
+        taken = (
+            await db.execute(
+                select(Ticket.seat_id).where(
+                    Ticket.session_id == session_id, Ticket.seat_id.in_(wanted)
+                )
+            )
+        ).scalars().all()
+        if taken:
+            labels = ", ".join(
+                seats[seat_id].label or f"R{seats[seat_id].row} S{seats[seat_id].col}"
+                for seat_id in taken
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=f"Место уже занято: {labels}"
+            )
+
+        prices = {
+            row.category: float(row.price)
+            for row in (
+                await db.execute(select(SeatPrice).where(SeatPrice.session_id == session_id))
+            ).scalars()
+        }
+        for seat_id in wanted:
+            seat = seats[seat_id]
+            tickets.append(
+                Ticket(
+                    ticket_id=new_ticket_id(),
+                    user_id=user.id,
+                    event_id=event_id,
+                    seat_id=seat.id,
+                    session_id=session_id,
+                    used=False,
+                    price_paid=prices.get(seat.category, 0.0),
+                )
+            )
+    else:
+        count = quantity or 1
+        if count > MAX_TICKETS_PER_ORDER:
+            raise HTTPException(
+                status_code=400,
+                detail=f"За один раз можно купить не больше {MAX_TICKETS_PER_ORDER} билетов",
+            )
+        if event.capacity:
+            sold = await db.scalar(
+                select(func.count(Ticket.id)).where(Ticket.event_id == event_id)
+            ) or 0
+            left = event.capacity - sold
+            if left <= 0:
+                raise HTTPException(status_code=409, detail="Мест нет")
+            if count > left:
+                raise HTTPException(status_code=409, detail=f"Осталось мест: {left}")
+        for _ in range(count):
+            tickets.append(
+                Ticket(
+                    ticket_id=new_ticket_id(),
+                    user_id=user.id,
+                    event_id=event_id,
+                    session_id=session_id,
+                    used=False,
+                    price_paid=float(event.price or 0),
+                )
+            )
+
+    db.add_all(tickets)
+    try:
+        await db.flush()
+    except IntegrityError:
+        # The unique seat index: another order took one of these seats between
+        # the check above and this write.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Место уже занято"
+        ) from None
+
+    ids = [ticket.id for ticket in tickets]
     result = await db.execute(
-        select(Ticket)
-        .options(
-            selectinload(Ticket.event),
-            # .hall as well: serialize_ticket reads the hall name, and a lazy
-            # load of it inside async code raises MissingGreenlet.
-            selectinload(Ticket.seat).selectinload(Seat.hall),
-        )
-        .where(Ticket.id == ticket.id)
+        _with_relations(select(Ticket).where(Ticket.id.in_(ids))).order_by(Ticket.id)
     )
-    return result.scalar_one()
+    return list(result.scalars().all())
+
+
+async def generate_ticket(
+    db: AsyncSession,
+    user: User,
+    event_id: int,
+    session_id: int | None = None,
+    seat_id: int | None = None,
+) -> Ticket:
+    """A single ticket -- an order of one. Kept for callers such as the demo seed."""
+    tickets = await generate_tickets(
+        db, user, event_id, session_id, [seat_id] if seat_id else None, 1
+    )
+    return tickets[0]
 
 
 async def get_user_tickets(db: AsyncSession, user_id: int) -> list[Ticket]:
@@ -184,7 +281,12 @@ async def get_user_tickets(db: AsyncSession, user_id: int) -> list[Ticket]:
             # load of it inside async code raises MissingGreenlet.
             selectinload(Ticket.seat).selectinload(Seat.hall),
         )
-        .where(Ticket.user_id == user_id)
+        .where(
+            Ticket.user_id == user_id,
+            # A gift waiting for an answer is shown with the gifts, not here:
+            # it cannot be used until it is accepted.
+            or_(Ticket.gift_status.is_(None), Ticket.gift_status != "pending"),
+        )
         .order_by(Ticket.created_at.desc())
     )
     return list(result.scalars().all())
@@ -214,6 +316,10 @@ async def scan_ticket(
     ticket = await get_ticket_by_public_id(db, ticket_id)
     if not ticket:
         return "invalid", "Билет не найден", None
+    if ticket.gift_status == "pending":
+        # Given away but not yet accepted: neither the giver nor the
+        # recipient may use it until the recipient says yes.
+        return "gift_pending", "Подарок ещё не принят получателем", ticket
     if ticket.used:
         return "used", "Билет уже использован", ticket
 

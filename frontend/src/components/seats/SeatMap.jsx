@@ -18,18 +18,25 @@ function seatFill(seat, isSelected) {
 /**
  * Interactive seat grid.
  *
+ * Two ways to select: pass `selectedSeatIds` (an array, in the order the seats
+ * were picked) with `onSeatToggle` to choose several, each marked with its
+ * place in that order; or `selectedSeatId` with `onSeatSelect` for one.
  * `mode="view"` renders the same picture without click handling, which the
  * hall list and the admin session view use.
  */
 export default function SeatMap({
   seats = [],
   selectedSeatId = null,
+  selectedSeatIds = null,
   onSeatSelect,
+  onSeatToggle,
   mode = 'select',
   screenLabel = 'Сцена',
 }) {
   const rows = groupByRow(seats)
   const selectable = mode === 'select'
+  const multi = Array.isArray(selectedSeatIds)
+  const order = multi ? new Map(selectedSeatIds.map((id, index) => [id, index + 1])) : null
 
   // Only the categories this hall actually contains. Listing VIP and balcony in
   // a hall that has neither invites the reader to hunt for seats that are not
@@ -65,7 +72,7 @@ export default function SeatMap({
         </p>
       </div>
 
-      <div className="overflow-x-auto pb-2">
+      <div className="overflow-x-auto pb-2 pt-2">
         <div className="mx-auto w-fit space-y-1.5">
           {rows.map(([row, cells]) => (
             <div key={row} className="flex items-center gap-2">
@@ -80,7 +87,8 @@ export default function SeatMap({
                     return <span key={seat.id} className="h-7 w-7" aria-hidden />
                   }
 
-                  const isSelected = seat.id === selectedSeatId
+                  const position = multi ? order.get(seat.id) : null
+                  const isSelected = multi ? position !== undefined : seat.id === selectedSeatId
                   const isBlocked = seat.is_taken || seat.category === 'disabled'
                   const canClick = selectable && !isBlocked
 
@@ -89,7 +97,12 @@ export default function SeatMap({
                       key={seat.id}
                       type="button"
                       disabled={!canClick}
-                      onClick={() => canClick && onSeatSelect?.(seat)}
+                      aria-pressed={selectable ? isSelected : undefined}
+                      onClick={() => {
+                        if (!canClick) return
+                        if (multi) onSeatToggle?.(seat)
+                        else onSeatSelect?.(seat)
+                      }}
                       title={`Ряд ${rowLetter(row)} · Место ${seatNumber(seat)} · ${
                         CATEGORY_LABELS[seat.category] ?? seat.category
                       }${seat.price ? ` · ${seat.price}` : ''}${
@@ -97,9 +110,9 @@ export default function SeatMap({
                       }`}
                       aria-label={`Место ${seat.label ?? seat.col}, ${
                         CATEGORY_LABELS[seat.category] ?? seat.category
-                      }${seat.is_taken ? ', занято' : ''}`}
+                      }${seat.is_taken ? ', занято' : ''}${isSelected ? ', выбрано' : ''}`}
                       className={[
-                        'grid h-7 w-7 place-items-center rounded-[5px] font-mono2 text-[9px]',
+                        'relative grid h-7 w-7 place-items-center rounded-[5px] font-mono2 text-[9px]',
                         'transition-all duration-150',
                         canClick
                           ? 'cursor-pointer hover:brightness-125 active:scale-90'
@@ -116,6 +129,13 @@ export default function SeatMap({
                       }}
                     >
                       {seatNumber(seat)}
+                      {/* The order it was picked in, so "the third seat" in the
+                          summary can be found on the map. */}
+                      {position !== null && position !== undefined && (
+                        <span className="absolute -right-1.5 -top-1.5 grid h-[14px] min-w-[14px] place-items-center rounded-full bg-[var(--text)] px-[3px] text-[8px] font-bold leading-none text-[var(--bg)]">
+                          {position}
+                        </span>
+                      )}
                     </button>
                   )
                 })}

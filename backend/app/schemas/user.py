@@ -29,6 +29,15 @@ class UserOut(BaseModel):
     avatar_url: str | None = None
 
 
+class ProfileUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=3, max_length=64)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=6, max_length=128)
+
+
 class UserRoleUpdate(BaseModel):
     role: str
 

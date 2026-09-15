@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, UserMinus, UserPlus, X } from 'lucide-react'
+import { Check, Gift, UserMinus, UserPlus, X } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { apiError } from '../api/client'
@@ -18,6 +18,7 @@ import { formatDate } from '../utils/dates'
 import Avatar from '../components/ui/Avatar'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
+import GiftModal from '../components/tickets/GiftModal'
 
 function Section({ title, children, aside }) {
   return (
@@ -86,6 +87,8 @@ export default function Friends() {
   const [username, setUsername] = useState('')
   // The outcome of the last request, shown under the form: { tone, text }.
   const [notice, setNotice] = useState(null)
+  // The friend a ticket is being given to, or null when the dialog is closed.
+  const [gifting, setGifting] = useState(null)
 
   // Arriving from an answered e-mail invitation: say so once, then tidy the
   // address so a reload does not say it again.
@@ -171,6 +174,10 @@ export default function Friends() {
                     Друзья с {formatDate(friend.since)}
                   </p>
                 </div>
+                <Button size="sm" variant="ghost" onClick={() => setGifting(friend)}>
+                  <Gift size={13} />
+                  Подарить билет
+                </Button>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -266,6 +273,10 @@ export default function Friends() {
           </p>
         )}
       </Section>
+
+      {gifting && (
+        <GiftModal friend={gifting} open onClose={() => setGifting(null)} />
+      )}
     </div>
   )
 }

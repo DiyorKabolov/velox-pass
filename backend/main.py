@@ -17,6 +17,7 @@ from app.routers import (
     auth,
     events,
     friends,
+    gifts,
     pdf_templates,
     scanner,
     sessions,
@@ -64,6 +65,7 @@ app.include_router(pdf_templates.router, prefix=API_PREFIX)
 app.include_router(pdf_templates.event_router, prefix=API_PREFIX)
 app.include_router(venue_admin.router, prefix=API_PREFIX)
 app.include_router(friends.router, prefix=API_PREFIX)
+app.include_router(gifts.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 
 

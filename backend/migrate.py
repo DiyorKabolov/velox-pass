@@ -85,12 +85,37 @@ COLUMNS = [
         "avatar_url",
         "ALTER TABLE users ADD COLUMN avatar_url TEXT",
     ),
+    (
+        "tickets",
+        "gifted_by",
+        "ALTER TABLE tickets ADD COLUMN gifted_by INTEGER "
+        "REFERENCES users(id) ON DELETE SET NULL",
+    ),
+    ("tickets", "gift_message", "ALTER TABLE tickets ADD COLUMN gift_message TEXT"),
+    ("tickets", "gift_status", "ALTER TABLE tickets ADD COLUMN gift_status TEXT DEFAULT NULL"),
+    (
+        "tickets",
+        "gift_token",
+        "ALTER TABLE tickets ADD COLUMN gift_token VARCHAR(36); "
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_tickets_gift_token ON tickets (gift_token)",
+    ),
 ]
 
 # Whole tables added after the first build. create_all would make these, but it
 # is only run by create_db.py; listing them here means one command brings an
 # existing database fully up to date.
 TABLES = ["pdf_templates", "friendships"]
+
+# Indexes on columns that already existed, so no ALTER above creates them.
+INDEXES = [
+    (
+        # One ticket per seat per showing. Checked before a sale as well, but
+        # only the database can settle two buyers checking at once.
+        "uq_ticket_seat_per_session",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_ticket_seat_per_session "
+        "ON tickets (session_id, seat_id) WHERE seat_id IS NOT NULL",
+    ),
+]
 
 
 def main() -> int:
@@ -132,6 +157,18 @@ def main() -> int:
 
                 connection.execute(text(ddl))
                 print(f"  + {table}.{column}: добавлена")
+                applied += 1
+
+            for name, ddl in INDEXES:
+                present = connection.execute(
+                    text("SELECT 1 FROM pg_indexes WHERE indexname = :name"),
+                    {"name": name},
+                ).scalar()
+                if present:
+                    print(f"  - индекс {name}: уже есть")
+                    continue
+                connection.execute(text(ddl))
+                print(f"  + индекс {name}: создан")
                 applied += 1
     except Exception as exc:  # noqa: BLE001 - the message is the whole point
         print(f"ОШИБКА: {exc}")
