@@ -15,6 +15,12 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true
+      },
+      // Stored pictures -- covers, venue photos, avatars -- are served by the
+      // backend too; without this they 404 in development only.
+      '/uploads': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
       }
     }
   }

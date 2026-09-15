@@ -4,6 +4,8 @@ import Footer from './components/layout/Footer'
 import useAuth, { useSyncUser } from './hooks/useAuth'
 import Cabinet from './pages/Cabinet'
 import Confirm from './pages/Confirm'
+import FriendInvite from './pages/FriendInvite'
+import Friends from './pages/Friends'
 import EventDetail from './pages/EventDetail'
 import Home from './pages/Home'
 import Login from './pages/Login'
@@ -121,6 +123,17 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/friends"
+            element={
+              <ProtectedRoute>
+                <Friends />
+              </ProtectedRoute>
+            }
+          />
+          {/* Public: the links in an invitation e-mail land here, and the
+              person answering may not be signed in. */}
+          <Route path="/friends/respond" element={<FriendInvite />} />
 
           <Route
             path="/scanner"

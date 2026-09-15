@@ -80,12 +80,17 @@ COLUMNS = [
         "price",
         "ALTER TABLE events ADD COLUMN price NUMERIC(10, 2) NOT NULL DEFAULT 0",
     ),
+    (
+        "users",
+        "avatar_url",
+        "ALTER TABLE users ADD COLUMN avatar_url TEXT",
+    ),
 ]
 
 # Whole tables added after the first build. create_all would make these, but it
 # is only run by create_db.py; listing them here means one command brings an
 # existing database fully up to date.
-TABLES = ["pdf_templates"]
+TABLES = ["pdf_templates", "friendships"]
 
 
 def main() -> int:

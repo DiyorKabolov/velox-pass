@@ -26,6 +26,7 @@ class UserOut(BaseModel):
     role: str
     is_verified: bool
     created_at: datetime
+    avatar_url: str | None = None
 
 
 class UserRoleUpdate(BaseModel):

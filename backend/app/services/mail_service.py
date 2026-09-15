@@ -3,6 +3,7 @@
 When MAIL_FROM / MAIL_PASSWORD are not configured the message is printed to the
 console instead of being sent, so local development works without credentials.
 """
+import html
 import smtplib
 import ssl
 from email.message import EmailMessage
@@ -135,5 +136,60 @@ def send_ticket_email(to_email: str, username: str, event_title: str, ticket_id:
           </div>
           <p style="margin:0;font-size:13px;line-height:1.6;color:{MUTED};">
             Open your cabinet in Velox Pass to show the QR code or download the PDF.
+          </p>"""
+    return _send(to_email, subject, text, _shell(inner))
+
+
+def send_friend_request_email(
+    to_email: str, requester_username: str, accept_url: str, decline_url: str
+) -> bool:
+    """Invite someone to be friends, with a link to accept and one to decline.
+
+    The username is chosen by whoever sent the request, so it is escaped before
+    it goes into the HTML, and stripped of line breaks before the subject: a
+    name carrying markup would otherwise restyle the message, and one carrying
+    a newline would be refused as a header.
+    """
+    name = " ".join(requester_username.split())
+    safe_name = html.escape(name)
+    accept = html.escape(accept_url, quote=True)
+    decline = html.escape(decline_url, quote=True)
+
+    subject = f"{name} хочет добавить вас в друзья на Velox Pass"
+    text = (
+        f"{name} приглашает вас в друзья на Velox Pass.\n\n"
+        f"Принять: {accept_url}\n"
+        f"Отклонить: {decline_url}\n\n"
+        "Если вы не знаете этого человека, просто проигнорируйте письмо.\n"
+    )
+    inner = f"""\
+          <p style="margin:0 0 4px;font-size:12px;letter-spacing:3px;color:{ACCENT};">
+            VELOX&middot;PASS
+          </p>
+          <h1 style="margin:0 0 20px;font-size:22px;font-weight:600;color:{TEXT};">
+            Приглашение в друзья
+          </h1>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:{MUTED};">
+            <strong style="color:{TEXT};">{safe_name}</strong>
+            приглашает вас в друзья на Velox Pass.
+          </p>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            <tr>
+              <td style="padding-right:12px;">
+                <a href="{accept}"
+                   style="display:inline-block;padding:12px 26px;border-radius:8px;
+                          background:{ACCENT};color:{BG};font-size:15px;font-weight:600;
+                          text-decoration:none;">Принять</a>
+              </td>
+              <td>
+                <a href="{decline}"
+                   style="display:inline-block;padding:11px 25px;border-radius:8px;
+                          border:1px solid {BORDER};color:{MUTED};font-size:15px;
+                          text-decoration:none;">Отклонить</a>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:0;font-size:13px;line-height:1.6;color:{MUTED};">
+            Если вы не знаете этого человека, просто проигнорируйте письмо.
           </p>"""
     return _send(to_email, subject, text, _shell(inner))

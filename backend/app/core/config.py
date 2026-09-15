@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # ngrok. A static domain keeps one public address across restarts, so
     # browser sessions survive; leave it empty for a random ngrok URL.
     NGROK_DOMAIN: str = ""
+    # Where links in e-mails point. Empty means: the ngrok domain when there
+    # is one, otherwise the address the request came from.
+    PUBLIC_URL: str = ""
     NGROK_AUTH_TOKEN: str = ""
 
     @property

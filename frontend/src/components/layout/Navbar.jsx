@@ -7,6 +7,7 @@ import {
   Store,
   Ticket,
   User,
+  Users,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
@@ -89,6 +90,12 @@ export default function Navbar() {
           {isAuthenticated && (
             <NavItem to="/cabinet" icon={Ticket}>
               Мои билеты
+            </NavItem>
+          )}
+
+          {isAuthenticated && (
+            <NavItem to="/friends" icon={Users}>
+              Друзья
             </NavItem>
           )}
 

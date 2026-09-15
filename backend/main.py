@@ -16,11 +16,13 @@ from app.routers import (
     admin,
     auth,
     events,
+    friends,
     pdf_templates,
     scanner,
     sessions,
     staff_events,
     tickets,
+    users,
     venue_admin,
     venues,
 )
@@ -61,6 +63,8 @@ app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(pdf_templates.router, prefix=API_PREFIX)
 app.include_router(pdf_templates.event_router, prefix=API_PREFIX)
 app.include_router(venue_admin.router, prefix=API_PREFIX)
+app.include_router(friends.router, prefix=API_PREFIX)
+app.include_router(users.router, prefix=API_PREFIX)
 
 
 @app.get("/api/status", tags=["system"])
