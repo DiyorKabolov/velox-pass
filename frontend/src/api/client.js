@@ -30,15 +30,18 @@ client.interceptors.request.use((config) => {
   return config
 })
 
-// A 401 means the token is gone or expired: drop it and bounce to /login.
+// A 401 means the token is gone or expired: drop it and bounce to /login,
+// with the page to come back to in the address -- a full reload has no router
+// state to carry it in.
 client.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem('velox_user')
-      if (!window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login'
+      const { pathname, search } = window.location
+      if (!pathname.startsWith('/login')) {
+        window.location.href = `/login?next=${encodeURIComponent(pathname + search)}`
       }
     }
     return Promise.reject(error)

@@ -10,7 +10,7 @@ import { COLOR_PRESETS, DEFAULT_COLORS } from './eventForm'
 
 function Caption({ children }) {
   return (
-    <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+    <span className="t-label mb-2 block">
       {children}
     </span>
   )
@@ -33,7 +33,7 @@ export function TagPicker({ value, onChange }) {
               aria-pressed={on}
               onClick={() => onChange(on ? tags.filter((t) => t !== tag) : [...tags, tag])}
               className={[
-                'rounded-full border px-3 py-1.5 text-xs transition-all duration-150',
+                'rounded-[3px] border px-3 py-1.5 text-xs transition-all duration-150',
                 'active:scale-[0.95]',
                 on ? 'font-medium' : 'text-[var(--muted)] hover:text-[var(--text)]',
               ].join(' ')}
@@ -90,7 +90,7 @@ export function CardColors({ value, onChange }) {
               className={[
                 'flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3 text-xs transition-all duration-150 active:scale-[0.95]',
                 isActive
-                  ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--text)]'
+                  ? 'border-[var(--text)] bg-[var(--surface2)] text-[var(--text)]'
                   : 'border-[var(--border)] text-[var(--muted)] hover:border-[var(--border2)] hover:text-[var(--text)]',
               ].join(' ')}
             >

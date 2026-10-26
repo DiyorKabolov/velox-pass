@@ -1,8 +1,12 @@
+// Seats are drawn in the lobby's own inks: a warm grey for the ordinary seat,
+// gold for VIP, a cool steel for the balcony. A taken seat sinks almost into
+// the floor, an unavailable one is hatched, and the seats being chosen light up
+// in the signal colour -- the only vermilion on the map.
 export const CATEGORY_COLORS = {
-  standard: '#52575f',
-  vip: '#fbbf24',
-  balcony: '#60a5fa',
-  disabled: '#2a2a2a',
+  standard: '#3b3732',
+  vip: '#e8b54a',
+  balcony: '#8aa1d6',
+  disabled: 'repeating-linear-gradient(135deg, #1d1b19 0 3px, #2a2723 3px 6px)',
 }
 
 export const CATEGORY_LABELS = {
@@ -12,8 +16,8 @@ export const CATEGORY_LABELS = {
   disabled: 'Недоступно',
 }
 
-export const TAKEN_COLOR = '#7f1d1d'
-export const SELECTED_COLOR = '#a8b8c8'
+export const TAKEN_COLOR = '#211e1b'
+export const SELECTED_COLOR = '#ff5b2e'
 
 /** Cycle used by the hall editor when a cell is clicked. */
 export const CATEGORY_CYCLE = ['standard', 'vip', 'balcony', 'aisle', 'disabled']

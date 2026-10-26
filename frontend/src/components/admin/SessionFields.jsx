@@ -8,7 +8,7 @@ import { CATEGORY_LABELS, PRICE_CATEGORIES } from './sessionForm'
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+      <span className="t-label mb-2 block">
         {label}
       </span>
       {children}
@@ -57,7 +57,7 @@ export default function SessionFields({ value, onChange, disabled = false }) {
               className={[
                 'flex-1 rounded-[6px] px-3 py-1.5 text-xs transition-all duration-150',
                 active
-                  ? 'bg-[var(--accent)] font-medium text-[var(--bg)]'
+                  ? 'bg-[var(--select)] font-medium text-[var(--text)]'
                   : 'text-[var(--muted)] hover:text-[var(--text)]',
               ].join(' ')}
             >
@@ -113,7 +113,7 @@ export default function SessionFields({ value, onChange, disabled = false }) {
       )}
 
       <div>
-        <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+        <span className="t-label mb-2 block">
           Цены по категориям
         </span>
         <div className="grid gap-3 sm:grid-cols-3">

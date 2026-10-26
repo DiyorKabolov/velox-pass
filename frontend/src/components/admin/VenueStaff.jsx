@@ -6,6 +6,7 @@ import { getUsers } from '../../api/admin'
 import { addVenueStaff, getVenueStaff, removeVenueStaff } from '../../api/venues'
 import { apiError } from '../../api/client'
 import { formatDateTime } from '../../utils/dates'
+import { ACCOUNT_ROLE_LABELS } from '../../utils/roles'
 import Button from '../ui/Button'
 import Select from '../ui/Select'
 
@@ -38,7 +39,7 @@ export function RoleBadge({ role }) {
   return (
     <span
       style={ROLE_STYLE[role] ?? ROLE_STYLE.scanner}
-      className="inline-flex whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px]"
+      className="inline-flex whitespace-nowrap rounded-[3px] border px-2.5 py-0.5 text-[11px]"
     >
       {ROLE_LABELS[role] ?? role}
     </span>
@@ -115,7 +116,7 @@ export default function VenueStaff({ venueId, bare = false }) {
         }`}
       >
         {!bare && (
-          <p className="font-mono2 text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
+          <p className="t-label">
             Персонал
           </p>
         )}
@@ -128,11 +129,11 @@ export default function VenueStaff({ venueId, bare = false }) {
       </div>
 
       {isLoading ? (
-        <div className="h-10 animate-pulse rounded bg-[var(--surface2)]" />
+        <div className="h-10 skeleton rounded" />
       ) : staff?.length ? (
         <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--border)]">
           <div
-            className={`${COLS} border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono2 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]`}
+            className={`${COLS} border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2 t-label`}
           >
             <span className="truncate">Имя пользователя</span>
             <span className="truncate">Email</span>
@@ -157,9 +158,11 @@ export default function VenueStaff({ venueId, bare = false }) {
                 {person.global_role !== person.role && (
                   <span
                     title="Роль аккаунта отличается от назначения на этой площадке"
-                    className="hidden whitespace-nowrap rounded-full border border-[var(--border2)] px-2 py-0.5 text-[10px] text-[var(--muted2)] lg:inline"
+                    className="hidden whitespace-nowrap rounded-[3px] border border-[var(--border2)] px-2 py-0.5 text-[10px] text-[var(--muted2)] lg:inline"
                   >
-                    аккаунт: {ROLE_LABELS[person.global_role] ?? person.global_role}
+                    {/* The account's own role, which may be any of four --
+                        not only the two a venue hands out. */}
+                    аккаунт: {ACCOUNT_ROLE_LABELS[person.global_role] ?? person.global_role}
                   </span>
                 )}
               </span>
@@ -168,7 +171,7 @@ export default function VenueStaff({ venueId, bare = false }) {
                   size="sm"
                   variant="danger"
                   aria-label={`Снять ${person.username}`}
-                  loading={remove.isPending}
+                  loading={remove.isPending && remove.variables === person.user_id}
                   onClick={() => {
                     if (window.confirm(`Снять ${person.username} с этой площадки?`)) {
                       remove.mutate(person.user_id)

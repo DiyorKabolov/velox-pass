@@ -8,11 +8,21 @@ import {
   rowLetter,
   seatNumber,
 } from './seatStyles'
+import { formatPrice } from '../../utils/ticketGroups'
 
 function seatFill(seat, isSelected) {
   if (isSelected) return SELECTED_COLOR
   if (seat.is_taken) return TAKEN_COLOR
   return CATEGORY_COLORS[seat.category] ?? CATEGORY_COLORS.standard
+}
+
+/** Ink for the number printed on a seat, against whatever it is filled with. */
+function seatInk(seat, isSelected) {
+  if (isSelected) return '#170803'
+  if (seat.is_taken) return '#4a4540'
+  if (seat.category === 'vip' || seat.category === 'balcony') return '#14110f'
+  if (seat.category === 'disabled') return 'transparent'
+  return '#cfc8bd'
 }
 
 /**
@@ -50,7 +60,7 @@ export default function SeatMap({
 
   if (!rows.length) {
     return (
-      <p className="py-8 text-center text-sm text-[var(--muted)]">
+      <p className="py-8 text-center text-[14px] text-[var(--muted)]">
         В этом зале ещё нет мест.
       </p>
     )
@@ -58,25 +68,23 @@ export default function SeatMap({
 
   return (
     <div>
-      {/* Screen / stage indicator */}
-      <div className="mb-6">
+      {/* Stage / screen: a band of light the seats face. */}
+      <div className="mb-8">
         <div
-          className="mx-auto h-1.5 w-3/4 rounded-full"
+          className="mx-auto h-[3px] w-3/4 rounded-full"
           style={{
             background:
-              'linear-gradient(90deg, transparent, var(--accent), transparent)',
+              'linear-gradient(90deg, transparent, rgba(241,236,227,0.85) 30%, rgba(241,236,227,0.85) 70%, transparent)',
           }}
         />
-        <p className="mt-2 text-center font-mono2 text-[10px] uppercase tracking-[0.24em] text-[var(--muted2)]">
-          {screenLabel}
-        </p>
+        <p className="t-label mt-3 text-center">{screenLabel}</p>
       </div>
 
       <div className="overflow-x-auto pb-2 pt-2">
         <div className="mx-auto w-fit space-y-1.5">
           {rows.map(([row, cells]) => (
-            <div key={row} className="flex items-center gap-2">
-              <span className="w-6 shrink-0 text-right font-mono2 text-[10px] text-[var(--muted2)]">
+            <div key={row} className="flex items-center gap-2.5">
+              <span className="w-6 shrink-0 text-right text-[11px] font-semibold text-[var(--muted2)]">
                 {rowLetter(row)}
               </span>
 
@@ -105,34 +113,30 @@ export default function SeatMap({
                       }}
                       title={`Ряд ${rowLetter(row)} · Место ${seatNumber(seat)} · ${
                         CATEGORY_LABELS[seat.category] ?? seat.category
-                      }${seat.price ? ` · ${seat.price}` : ''}${
+                      }${seat.price ? ` · ${formatPrice(seat.price)}` : ''}${
                         seat.is_taken ? ' · занято' : ''
                       }`}
                       aria-label={`Место ${seat.label ?? seat.col}, ${
                         CATEGORY_LABELS[seat.category] ?? seat.category
                       }${seat.is_taken ? ', занято' : ''}${isSelected ? ', выбрано' : ''}`}
                       className={[
-                        'relative grid h-7 w-7 place-items-center rounded-[5px] font-mono2 text-[9px]',
-                        'transition-all duration-150',
+                        'relative grid h-7 w-7 place-items-center rounded-[4px] text-[10px] font-semibold',
+                        'transition-[filter,transform,background-color] duration-150 ease-out',
                         canClick
-                          ? 'cursor-pointer hover:brightness-125 active:scale-90'
+                          ? 'cursor-pointer hover:-translate-y-px hover:brightness-125 active:scale-90'
                           : 'cursor-not-allowed',
-                        isSelected ? 'ring-2 ring-[var(--text)] ring-offset-1 ring-offset-[var(--surface)]' : '',
-                        seat.category === 'vip' && !seat.is_taken && !isSelected
-                          ? 'shadow-[0_0_8px_rgba(251,191,36,0.45)]'
-                          : '',
+                        isSelected ? 'scale-[1.06]' : '',
                       ].join(' ')}
                       style={{
                         background: seatFill(seat, isSelected),
-                        color: isSelected || seat.category === 'vip' ? '#1a1c1e' : '#cfd3d8',
-                        opacity: seat.is_taken ? 0.75 : 1,
+                        color: seatInk(seat, isSelected),
                       }}
                     >
                       {seatNumber(seat)}
                       {/* The order it was picked in, so "the third seat" in the
                           summary can be found on the map. */}
                       {position !== null && position !== undefined && (
-                        <span className="absolute -right-1.5 -top-1.5 grid h-[14px] min-w-[14px] place-items-center rounded-full bg-[var(--text)] px-[3px] text-[8px] font-bold leading-none text-[var(--bg)]">
+                        <span className="absolute -right-1.5 -top-1.5 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[var(--text)] px-[3px] text-[9px] font-bold leading-none text-[var(--bg)]">
                           {position}
                         </span>
                       )}
@@ -146,17 +150,14 @@ export default function SeatMap({
       </div>
 
       {legend.length > 0 && (
-      <div className="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-2 border-t border-[var(--border)] pt-4">
-        {legend.map((item) => (
-          <span key={item.key} className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
-            <span
-              className="h-3 w-3 rounded-[3px]"
-              style={{ background: item.color }}
-            />
-            {item.label}
-          </span>
-        ))}
-      </div>
+        <div className="mt-8 flex flex-wrap justify-center gap-x-5 gap-y-2 border-t border-[var(--border)] pt-5">
+          {legend.map((item) => (
+            <span key={item.key} className="flex items-center gap-2 text-[12px] text-[var(--muted)]">
+              <span className="h-3 w-3 rounded-[3px]" style={{ background: item.color }} />
+              {item.label}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   )

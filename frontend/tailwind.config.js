@@ -18,13 +18,20 @@ export default {
         warn: 'var(--warn)'
       },
       fontFamily: {
-        display: ['Unbounded', 'sans-serif'],
-        sans: ['Manrope', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace']
+        // Headings and anything set in capitals at a size you read at a glance.
+        display: ['"Sofia Sans Condensed"', '"Arial Narrow"', 'sans-serif'],
+        // Posters, page titles and the big numbers: the playbill voice.
+        poster: ['"Sofia Sans Extra Condensed"', '"Sofia Sans Condensed"', '"Arial Narrow"', 'sans-serif'],
+        sans: ['"Golos Text"', 'system-ui', 'sans-serif'],
+        mono: ['"Martian Mono"', 'ui-monospace', 'monospace']
       },
       borderRadius: {
         card: 'var(--radius)',
         sm2: 'var(--radius-sm)'
+      },
+      transitionTimingFunction: {
+        out: 'cubic-bezier(0.16, 1, 0.3, 1)',
+        'in-out': 'cubic-bezier(0.65, 0, 0.35, 1)'
       }
     }
   },

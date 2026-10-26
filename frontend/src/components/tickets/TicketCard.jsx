@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Clock, MapPin } from 'lucide-react'
+import { CalendarDays, Clock, Download, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { downloadPdf, fetchQrBlobUrl } from '../../api/tickets'
-import { formatDateTime, formatIsoDate, isExpired } from '../../utils/dates'
-import { isTicketExpired } from '../../utils/eventState'
+import { formatDateTime, formatShortDate } from '../../utils/dates'
+import { isTicketExpired, ticketStartsAt } from '../../utils/eventState'
 import { getTicketColors, readableOn, withAlpha } from '../../utils/colors'
 import TruncatedText from '../ui/TruncatedText'
 
@@ -50,11 +50,16 @@ const NOTCH = 18
 // colour of the page.
 const SPENT = 'grayscale(0.92) brightness(0.94)'
 
+// Printed inks rather than signal colours: these sit on the ticket's own paper.
+// A passed ticket is not an alarm, so "Истёк" is a brown, not a red.
 const STATES = {
-  valid: { label: 'Активен', color: '#2f7d4f' },
-  expired: { label: 'Истёк', color: '#b8433d' },
+  valid: { label: 'Активен', color: '#1f7a45' },
+  expired: { label: 'Истёк', color: '#8a5a2b' },
   used: { label: 'Погашен', color: '#5f6570' },
 }
+
+// The die-cut corner of the card stock.
+const RADIUS = 14
 
 // Starts and ends on a PEAK, not in a valley: the notch at each end of the tear
 // is welded to the seam, so this is what decides where the pair sits. The shift
@@ -248,8 +253,8 @@ function ToothTint({ edge, color }) {
 
 function InfoRow({ icon: Icon, children }) {
   return (
-    <p className="flex items-center gap-2 text-[13px] leading-none opacity-60 sm:gap-2.5 sm:text-[15px]">
-      <Icon size={16} strokeWidth={1.8} className="shrink-0 opacity-80" />
+    <p className="flex items-center gap-2 text-[13px] leading-none opacity-[0.72] sm:gap-2.5 sm:text-[14px]">
+      <Icon size={15} strokeWidth={1.75} className="shrink-0 opacity-80" />
       <span className="min-w-0 flex-1">{children}</span>
     </p>
   )
@@ -323,7 +328,7 @@ export default function TicketCard({ ticket }) {
           style={{
             background: colors.bg,
             color: colors.text,
-            borderRadius: torn ? 18 : '18px 0 0 18px',
+            borderRadius: torn ? RADIUS : `${RADIUS}px 0 0 ${RADIUS}px`,
             transform: torn ? `rotate(${tilt.body.toFixed(2)}deg)` : 'none',
             transformOrigin: 'center',
             filter: torn ? SPENT : 'none',
@@ -332,13 +337,14 @@ export default function TicketCard({ ticket }) {
         >
           {torn && <ToothTint edge="right" color={colors.accent} />}
 
-          <h3 className="text-[18px] font-extrabold leading-tight sm:text-[22px]">
+          <h3 className="t-poster text-[26px] leading-[0.95] sm:text-[31px]">
             <TruncatedText text={title} maxLines={2} />
           </h3>
 
           <div className="flex flex-col gap-2.5">
             <InfoRow icon={CalendarDays}>
-              <span className="block truncate">{formatDateTime(ticket.event_date)}</span>
+              {/* The showing this ticket is for -- for a run, not its first night. */}
+              <span className="block truncate">{formatDateTime(ticketStartsAt(ticket))}</span>
             </InfoRow>
             {place && (
               <InfoRow icon={MapPin}>
@@ -347,7 +353,7 @@ export default function TicketCard({ ticket }) {
             )}
             <InfoRow icon={Clock}>
               <span className="block truncate">
-                Получен {formatIsoDate(ticket.created_at)}
+                Получен {formatShortDate(ticket.created_at)}
               </span>
             </InfoRow>
           </div>
@@ -355,10 +361,10 @@ export default function TicketCard({ ticket }) {
           {/* Id, download and state share one row so the height stays constant. */}
           <div className="flex min-w-0 items-center gap-2">
             <span
-              className="min-w-0 truncate rounded-full px-2.5 py-1.5 font-mono2 text-[11px]"
+              className="min-w-0 truncate rounded-[3px] px-2 py-[7px] font-mono2 text-[10.5px] leading-none"
               style={{
-                background: withAlpha(colors.accent, 0.14),
-                border: `1px solid ${withAlpha(colors.accent, 0.45)}`,
+                background: withAlpha(colors.accent, 0.16),
+                boxShadow: `inset 0 0 0 1px ${withAlpha(colors.accent, 0.45)}`,
               }}
             >
               {ticket.ticket_id}
@@ -368,21 +374,23 @@ export default function TicketCard({ ticket }) {
               type="button"
               onClick={handleDownload}
               disabled={downloading}
-              className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium transition-all duration-150 hover:brightness-95 active:scale-[0.94] disabled:opacity-50 disabled:active:scale-100"
+              aria-label="Скачать PDF"
+              className="inline-flex shrink-0 items-center gap-1 rounded-[3px] px-2.5 py-[6px] text-[11px] font-semibold leading-none transition-[background-color,transform] duration-200 active:scale-[0.94] disabled:opacity-50 disabled:active:scale-100"
               style={{
-                border: `1px solid ${withAlpha(colors.text, 0.22)}`,
+                boxShadow: `inset 0 0 0 1px ${withAlpha(colors.text, 0.25)}`,
                 color: colors.text,
               }}
             >
-              {downloading ? '…' : '↓ PDF'}
+              <Download size={12} strokeWidth={2} />
+              {downloading ? '…' : 'PDF'}
             </button>
 
+            {/* A rubber stamp, slightly askew: the state of this ticket. */}
             <span
-              className="shrink-0 rounded-full px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em]"
+              className="shrink-0 -rotate-2 rounded-[3px] px-2 pb-[4px] pt-[5px] font-display text-[11.5px] font-bold uppercase leading-none tracking-[0.04em]"
               style={{
                 color: state.color,
-                background: withAlpha(state.color, 0.12),
-                border: `1px solid ${withAlpha(state.color, 0.4)}`,
+                boxShadow: `inset 0 0 0 1.5px ${withAlpha(state.color, 0.7)}`,
               }}
             >
               {state.label}
@@ -396,7 +404,7 @@ export default function TicketCard({ ticket }) {
           style={{
             background: colors.accent,
             color: stubText,
-            borderRadius: torn ? 18 : '0 18px 18px 0',
+            borderRadius: torn ? RADIUS : `0 ${RADIUS}px ${RADIUS}px 0`,
             marginLeft: torn ? SPLIT : 0,
             transform: torn ? `rotate(${tilt.stub.toFixed(2)}deg)` : 'none',
             transformOrigin: 'left center',
@@ -406,21 +414,21 @@ export default function TicketCard({ ticket }) {
         >
           {torn && <ToothTint edge="left" color={colors.bg} />}
 
-          <div className="flex h-[86px] w-[86px] items-center justify-center rounded-xl bg-white p-1 sm:h-[104px] sm:w-[104px] sm:p-1.5">
+          <div className="flex h-[86px] w-[86px] items-center justify-center rounded-[8px] bg-white p-1 sm:h-[104px] sm:w-[104px] sm:p-1.5">
             {qrSrc ? (
               <img
                 src={qrSrc}
                 alt={`QR-код билета ${ticket.ticket_id}`}
-                className="h-full w-full object-contain"
+                className="anim-fade h-full w-full object-contain"
               />
             ) : (
-              <span className="font-mono2 text-[9px] text-black/30">QR</span>
+              <span className="skeleton h-full w-full rounded-[4px] bg-black/10" />
             )}
           </div>
 
           {/* Always the call to action -- the seat is spelled out in full on
               the body's location line, so repeating it here says nothing new. */}
-          <p className="text-center text-[10px] font-semibold uppercase leading-[1.4] tracking-[0.12em] opacity-85">
+          <p className="text-center font-display text-[11.5px] font-bold uppercase leading-[1.15] tracking-[0.04em] opacity-90">
             Покажите
             <br />
             при входе

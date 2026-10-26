@@ -101,6 +101,9 @@ export default function SessionsByDate({ events }) {
             size="sm"
             variant="danger"
             aria-label="Отменить сеанс"
+            // Spins on this row only, and is disabled while it does: a second
+            // click used to send the request twice.
+            loading={cancel.isPending && cancel.variables === session.id}
             onClick={() => {
               if (window.confirm('Отменить сеанс? Проданные билеты останутся.')) {
                 cancel.mutate(session.id)
@@ -139,9 +142,9 @@ export default function SessionsByDate({ events }) {
               <tr>
                 <Td colSpan={6} className="!px-0 !py-0">
                   <div className="flex flex-wrap items-center gap-3 bg-[var(--surface)] px-4 py-2.5">
-                    <Repeat size={14} className="shrink-0 text-[var(--accent)]" />
+                    <Repeat size={14} className="shrink-0 text-[var(--muted)]" />
                     <span className="min-w-0 flex-1 truncate text-sm">{block.title}</span>
-                    <span className="shrink-0 rounded-full border border-[var(--border2)] px-2.5 py-1 font-mono2 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                    <span className="shrink-0 rounded-[3px] border border-[var(--border2)] px-2.5 py-1 t-label">
                       Серия: {pluralize(block.sessions.length, 'сеанс', 'сеанса', 'сеансов')}
                     </span>
                     <Button

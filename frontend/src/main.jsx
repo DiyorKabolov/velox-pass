@@ -33,9 +33,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             style: {
               background: 'var(--surface2)',
               color: 'var(--text)',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--border2)',
               borderRadius: 'var(--radius-sm)',
               fontSize: '14px',
+              fontFamily: "'Golos Text', system-ui, sans-serif",
+              padding: '10px 14px',
+              boxShadow: '0 24px 48px -16px rgba(0, 0, 0, 0.8)',
             },
             success: { iconTheme: { primary: 'var(--ok)', secondary: 'var(--bg)' } },
             error: { iconTheme: { primary: 'var(--err)', secondary: 'var(--bg)' } },

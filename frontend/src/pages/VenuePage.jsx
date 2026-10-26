@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Armchair, CalendarDays, MapPin } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { ArrowLeft } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { getPublicVenue, getVenueSessions } from '../api/venues'
 import Select from '../components/ui/Select'
+import { CONTAINER, EmptyState, PageHeader, SectionHead } from '../components/ui/Page'
+import { Reveal } from '../components/motion/Motion'
 import {
   dayKey,
   formatDayLabel,
@@ -11,7 +14,7 @@ import {
   MONTHS_SHORT,
   WEEKDAYS_SHORT,
 } from '../utils/dates'
-import { formatPrice } from '../utils/ticketGroups'
+import { formatFrom } from '../utils/ticketGroups'
 import { pluralize } from '../utils/plural'
 import { venueTypeColor, venueTypeLabel } from '../utils/venueTypes'
 
@@ -51,7 +54,7 @@ function groupSchedule(sessions) {
   return [...days.values()].map((day) => ({ ...day, groups: [...day.groups.values()] }))
 }
 
-/** One tab in the day strip. */
+/** One cell of the day strip. The chosen one is a block of paper that slides. */
 function DayTab({ active, label, sublabel, onClick }) {
   return (
     <button
@@ -59,51 +62,54 @@ function DayTab({ active, label, sublabel, onClick }) {
       onClick={onClick}
       aria-pressed={active}
       className={[
-        'shrink-0 rounded-[var(--radius-sm)] border px-3 py-2 text-center',
-        'transition-all duration-150 active:scale-[0.95]',
-        active
-          ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--text)]'
-          : 'border-[var(--border)] text-[var(--muted)] hover:border-[var(--border2)] hover:text-[var(--text)]',
+        'relative min-w-[76px] shrink-0 border-l border-[var(--border)] px-3 py-3 text-center first:border-l-0',
+        'transition-colors duration-200',
+        active ? 'text-[var(--bg)]' : 'text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--text)]',
       ].join(' ')}
     >
-      <span className="block font-mono2 text-[10px] uppercase tracking-[0.14em] opacity-70">
+      {active && (
+        <motion.span
+          layoutId="venue-day"
+          transition={{ type: 'spring', stiffness: 480, damping: 40 }}
+          className="absolute inset-0 bg-[var(--text)]"
+        />
+      )}
+      <span className="relative block text-[11px] font-semibold uppercase tracking-[0.06em] opacity-75">
         {label}
       </span>
-      <span className="mt-0.5 block whitespace-nowrap text-sm">{sublabel}</span>
+      <span className="t-poster t-num relative mt-1 block whitespace-nowrap text-[22px] leading-none">
+        {sublabel}
+      </span>
     </button>
   )
 }
 
-/** One showing: when, how many seats are left, what it costs. */
+/** One showing, as a tear-off coupon: the time large, what is left beneath. */
 function SessionButton({ session }) {
   const soldOut = (session.available_seats ?? 0) <= 0
 
   const body = (
     <>
-      <span className="block font-mono2 text-base leading-none text-[var(--text)]">
+      <span className="t-poster t-num block text-[28px] leading-none text-[var(--text)]">
         {formatTime(session.datetime)}
       </span>
-      <span className="mt-1.5 flex items-center justify-center gap-1 text-[10px] text-[var(--muted2)]">
-        <Armchair size={10} className="shrink-0" />
-        {soldOut ? 'мест нет' : session.available_seats}
+      <span className="mt-2 block border-t border-dashed border-[var(--border2)] pt-1.5 text-[11px] text-[var(--muted)]">
+        {soldOut ? 'мест нет' : pluralize(session.available_seats, 'место', 'места', 'мест')}
       </span>
       {session.min_price != null && (
-        <span className="mt-0.5 block font-mono2 text-[10px] text-[var(--muted2)]">
-          от {formatPrice(session.min_price)}
+        <span className="t-num block text-[11px] text-[var(--muted2)]">
+          {formatFrom(session.min_price)}
         </span>
       )}
     </>
   )
 
   const shape =
-    'min-w-[76px] rounded-[var(--radius-sm)] border px-3 py-2 text-center transition-all duration-150'
+    'min-w-[92px] rounded-[var(--radius-sm)] border px-3 pb-2 pt-2.5 text-left transition-[border-color,background-color,transform] duration-200'
 
   if (soldOut) {
     return (
-      <span
-        aria-disabled
-        className={`${shape} cursor-not-allowed border-[var(--border)] opacity-45`}
-      >
+      <span aria-disabled className={`${shape} cursor-not-allowed border-[var(--border)] opacity-40`}>
         {body}
       </span>
     )
@@ -112,7 +118,7 @@ function SessionButton({ session }) {
   return (
     <Link
       to={`/event/${session.event_id}?session=${session.session_id}`}
-      className={`${shape} border-[var(--border)] hover:border-[var(--accent)] hover:bg-[var(--accent-dim)] active:scale-[0.96]`}
+      className={`${shape} border-[var(--border2)] hover:-translate-y-0.5 hover:border-[var(--accent)] hover:bg-[var(--surface)] active:translate-y-0`}
     >
       {body}
     </Link>
@@ -159,91 +165,93 @@ export default function VenuePage() {
 
   const schedule = useMemo(() => groupSchedule(filtered), [filtered])
   // The strip follows the filter: a day left empty by it is no longer a day
-  // with anything on.
-  const visible = day ? schedule.filter((entry) => entry.key === day) : schedule
+  // with anything on -- and if it was the day picked, the pick falls back to
+  // "Все" rather than leaving an empty schedule with no tab lit.
+  const activeDay = day && schedule.some((entry) => entry.key === day) ? day : null
+  const visible = activeDay ? schedule.filter((entry) => entry.key === activeDay) : schedule
 
   const accent = venueTypeColor(venue?.type)
 
   if (venueError) {
     return (
-      <div className="mx-auto max-w-5xl px-5 py-20 text-center">
-        <p className="text-sm text-[var(--err)]">Площадка не найдена.</p>
-        <Link to="/venues" className="mt-4 inline-block text-sm text-[var(--accent)]">
-          Все площадки
-        </Link>
+      <div className={`${CONTAINER} pt-12 sm:pt-16`}>
+        <EmptyState
+          title="Площадка не найдена"
+          action={
+            <Link to="/venues" className="t-link text-[14px] text-[var(--text)]">
+              Все площадки
+            </Link>
+          }
+        />
       </div>
     )
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-14">
-      <Link
-        to="/venues"
-        className="mb-8 inline-flex items-center gap-2 text-sm text-[var(--muted)] transition-colors hover:text-[var(--text)]"
-      >
-        <ArrowLeft size={15} /> Все площадки
-      </Link>
+    <div className={`${CONTAINER} pt-8 sm:pt-12`}>
+      <Reveal distance={6}>
+        <Link
+          to="/venues"
+          className="inline-flex items-center gap-2 text-[14px] text-[var(--muted)] transition-colors duration-200 hover:text-[var(--text)]"
+        >
+          <ArrowLeft size={15} strokeWidth={1.75} />
+          Все площадки
+        </Link>
+      </Reveal>
 
-      <header className="mb-10">
-        <h1 className="font-display text-3xl tracking-tight sm:text-4xl">
-          {venue?.name ?? '…'}
-        </h1>
-
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--muted)]">
-          {venue && (
-            <span
-              className="rounded-full px-2.5 py-1 font-mono2 text-[10px] uppercase tracking-[0.14em]"
-              style={{ background: `${accent}26`, color: accent }}
-            >
+      <PageHeader
+        className="mt-8"
+        rule={false}
+        size="lg"
+        kicker={
+          venue && (
+            <>
+              <span aria-hidden className="h-2 w-2 rounded-[1px]" style={{ background: accent }} />
               {venueTypeLabel(venue.type)}
-            </span>
-          )}
-          {venue?.address && (
-            <span className="inline-flex items-center gap-1.5">
-              <MapPin size={14} className="shrink-0 opacity-70" />
-              {venue.address}
-            </span>
-          )}
-          {venue?.halls_count > 0 && (
-            <span className="font-mono2 text-xs text-[var(--muted2)]">
-              {pluralize(venue.halls_count, 'зал', 'зала', 'залов')}
-            </span>
-          )}
-        </div>
+            </>
+          )
+        }
+        title={venue?.name ?? '…'}
+        meta={
+          <>
+            {venue?.address && <span>{venue.address}</span>}
+            {venue?.halls_count > 0 && (
+              <span className="t-num text-[var(--muted2)]">
+                {pluralize(venue.halls_count, 'зал', 'зала', 'залов')}
+              </span>
+            )}
+          </>
+        }
+        lead={venue?.description}
+      />
 
-        {venue?.description && (
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-[var(--muted)]">
-            {venue.description}
-          </p>
-        )}
-      </header>
-
-      <section>
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-mono2 text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
-            Расписание
-          </h2>
-          {eventOptions.length > 2 && (
-            <div className="w-full sm:w-64">
-              <Select
-                value={eventId}
-                onChange={setEventId}
-                aria-label="Фильтр по мероприятию"
-                options={eventOptions}
-              />
-            </div>
-          )}
-        </div>
+      <section className="mt-14">
+        <SectionHead
+          title="Расписание"
+          aside={
+            eventOptions.length > 2 && (
+              <div className="w-[260px]">
+                <Select
+                  value={eventId}
+                  onChange={setEventId}
+                  aria-label="Фильтр по мероприятию"
+                  options={eventOptions}
+                  className="!py-2 !text-[14px]"
+                />
+              </div>
+            )
+          }
+        />
 
         {isLoading ? (
-          <div className="h-56 animate-pulse rounded-[var(--radius)] bg-[var(--surface)]" />
+          <div className="skeleton mt-6 h-56 rounded-[var(--radius)]" />
         ) : schedule.length ? (
           <>
             {/* Days with something on. Nothing else is offered: a tab that can
                 only ever show "нет сеансов" is a dead end. */}
-            <div className="mb-7 flex gap-2 overflow-x-auto pb-2">
+            <div className="scrollbar-none mt-6 flex overflow-x-auto border-y border-[var(--border)]">
               <DayTab
-                active={day === null}
+                active={activeDay === null}
                 label="Все"
                 sublabel={pluralize(filtered.length, 'сеанс', 'сеанса', 'сеансов')}
                 onClick={() => setDay(null)}
@@ -253,7 +261,7 @@ export default function VenuePage() {
                 return (
                   <DayTab
                     key={entry.key}
-                    active={day === entry.key}
+                    active={activeDay === entry.key}
                     label={WEEKDAYS_SHORT[date.getDay()]}
                     sublabel={`${date.getDate()} ${MONTHS_SHORT[date.getMonth()]}`}
                     onClick={() => setDay(entry.key)}
@@ -262,32 +270,34 @@ export default function VenuePage() {
               })}
             </div>
 
-            <div className="space-y-8">
+            <div
+              key={`${activeDay ?? 'all'}::${eventId}`}
+              className="anim-rise space-y-12 pt-10"
+              style={{ '--rise': '10px' }}
+            >
               {visible.map((entry) => (
                 <div key={entry.key}>
-                  <h3 className="mb-3 text-sm font-medium text-[var(--text)]">
+                  <h3 className="font-display text-[20px] font-bold uppercase leading-none text-[var(--text)]">
                     {formatDayLabel(entry.at)}
                   </h3>
-                  <div className="space-y-3">
+                  <div className="mt-4 border-t border-[var(--border)]">
                     {entry.groups.map((group) => (
                       <div
                         key={group.key}
-                        className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-4"
+                        className="grid gap-x-8 gap-y-4 border-b border-[var(--border)] py-5 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)]"
                       >
-                        <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <div className="min-w-0">
                           <Link
                             to={`/event/${group.eventId}`}
-                            className="text-sm font-medium text-[var(--text)] transition-colors hover:text-[var(--accent)]"
+                            className="font-display text-[19px] font-bold uppercase leading-tight text-[var(--text)] transition-colors duration-200 hover:text-[var(--accent)]"
                           >
                             {group.title}
                           </Link>
                           {group.hallName && (
-                            <span className="text-xs text-[var(--muted2)]">
-                              — {group.hallName}
-                            </span>
+                            <p className="mt-1.5 text-[13px] text-[var(--muted)]">{group.hallName}</p>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2.5">
                           {group.sessions.map((session) => (
                             <SessionButton key={session.session_id} session={session} />
                           ))}
@@ -300,14 +310,10 @@ export default function VenuePage() {
             </div>
           </>
         ) : (
-          <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] py-16 text-center">
-            <CalendarDays size={24} className="mx-auto mb-3 text-[var(--muted2)]" />
-            <p className="text-sm text-[var(--muted)]">
-              {eventId === ALL_EVENTS
-                ? 'Нет сеансов.'
-                : 'Нет сеансов для выбранного мероприятия.'}
-            </p>
-          </div>
+          <EmptyState
+            className="mt-6"
+            title={eventId === ALL_EVENTS ? 'Нет сеансов' : 'Нет сеансов для выбранного мероприятия'}
+          />
         )}
       </section>
     </div>

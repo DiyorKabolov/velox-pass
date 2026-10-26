@@ -11,7 +11,7 @@ import Button from '../ui/Button'
 import Modal from '../ui/Modal'
 import Select from '../ui/Select'
 
-const GOLD = '#fbbf24'
+const GOLD = '#e8b54a'
 
 /**
  * Give one of your tickets to a chosen friend.
@@ -26,6 +26,17 @@ export default function GiftModal({ friend, open, onClose }) {
   const { data: tickets, isLoading } = useTickets()
   const [ticketId, setTicketId] = useState('')
   const [message, setMessage] = useState('')
+
+  // The window stays mounted between gifts, so each opening starts clean: the
+  // ticket picked last time has been given away.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setTicketId('')
+      setMessage('')
+    }
+  }
 
   const giftable = useMemo(
     () => (tickets ?? []).filter((ticket) => !ticket.used && !isTicketExpired(ticket)),
@@ -63,7 +74,7 @@ export default function GiftModal({ friend, open, onClose }) {
             onClick={() => send.mutate()}
             loading={send.isPending}
             disabled={!ticketId}
-            style={{ background: GOLD, borderColor: GOLD, color: '#1a1c1e' }}
+            style={{ background: GOLD, borderColor: GOLD, color: '#14110f' }}
           >
             Подарить
           </Button>
@@ -71,18 +82,18 @@ export default function GiftModal({ friend, open, onClose }) {
       }
     >
       {isLoading ? (
-        <div className="h-24 animate-pulse rounded-[var(--radius-sm)] bg-[var(--surface2)]" />
+        <div className="skeleton h-24 rounded-[var(--radius-sm)]" />
       ) : !giftable.length ? (
-        <p className="py-4 text-center text-sm text-[var(--muted)]">
+        <p className="py-4 text-[15px] text-[var(--muted)]">
           Действующих билетов нет.{' '}
-          <Link to="/" onClick={onClose} className="text-[var(--accent)]">
+          <Link to="/" onClick={onClose} className="t-link text-[var(--text)]">
             Выбрать что-нибудь в афише
           </Link>
         </p>
       ) : (
         <div className="space-y-4">
           <label className="block">
-            <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+            <span className="t-label mb-2 block">
               Выберите билет
             </span>
             <Select
@@ -98,7 +109,7 @@ export default function GiftModal({ friend, open, onClose }) {
           </label>
 
           <label className="block">
-            <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+            <span className="t-label mb-2 block">
               Сообщение
             </span>
             <textarea
@@ -106,12 +117,12 @@ export default function GiftModal({ friend, open, onClose }) {
               onChange={(event) => setMessage(event.target.value)}
               maxLength={500}
               rows={3}
-              placeholder="Поздравляю! 🎉"
-              className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none transition-all duration-150 placeholder:text-[var(--muted2)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25"
+              placeholder="Поздравляю!"
+              className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3.5 py-3 text-[15px] text-[var(--text)] outline-none transition-[border-color,box-shadow] duration-200 placeholder:text-[var(--muted2)] hover:border-[var(--border2)] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-dim)]"
             />
           </label>
 
-          <p className="text-xs text-[var(--muted2)]">
+          <p className="text-[13px] leading-relaxed text-[var(--muted)]">
             Билет сразу перейдёт к другу. Пока он не примет подарок, пройти по билету нельзя,
             а если откажется — билет вернётся к вам с новым QR-кодом.
           </p>

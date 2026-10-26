@@ -160,7 +160,7 @@ export default function Events() {
               className={[
                 'rounded-[6px] px-3.5 py-1.5 text-xs transition-all duration-150',
                 active
-                  ? 'bg-[var(--accent)] font-medium text-[var(--bg)]'
+                  ? 'bg-[var(--select)] font-medium text-[var(--text)]'
                   : 'text-[var(--muted)] hover:text-[var(--text)]',
               ].join(' ')}
             >
@@ -171,7 +171,7 @@ export default function Events() {
       </div>
 
       {isLoading ? (
-        <div className="h-48 animate-pulse rounded-[var(--radius)] bg-[var(--surface)]" />
+        <div className="h-48 skeleton rounded-[var(--radius)]" />
       ) : view === 'dates' ? (
         <SessionsByDate events={events} />
       ) : (
@@ -297,15 +297,14 @@ export default function Events() {
         </TableShell>
       )}
 
-      {scheduling && (
-        <SessionDialog
-          form={scheduling.form}
-          lockedEvent={scheduling.lockedEvent}
-          events={events}
-          onChange={(form) => setScheduling((current) => ({ ...current, form }))}
-          onClose={() => setScheduling(null)}
-        />
-      )}
+      {/* Always mounted and only opened and closed, so it can animate out. */}
+      <SessionDialog
+        form={scheduling?.form ?? null}
+        lockedEvent={scheduling?.lockedEvent}
+        events={events}
+        onChange={(form) => setScheduling((current) => ({ ...current, form }))}
+        onClose={() => setScheduling(null)}
+      />
 
       <Modal
         open={Boolean(editing)}

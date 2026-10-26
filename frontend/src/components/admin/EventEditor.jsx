@@ -72,7 +72,7 @@ export default function EventEditor({ form, onChange }) {
         />
 
         <label className="block">
-          <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+          <span className="t-label mb-2 block">
             Описание
           </span>
           <textarea
@@ -81,7 +81,7 @@ export default function EventEditor({ form, onChange }) {
             onChange={field('description')}
             rows={3}
             placeholder="О чём мероприятие?"
-            className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder:text-[var(--muted2)] outline-none transition-all duration-150 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25"
+            className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] placeholder:text-[var(--muted2)] outline-none transition-all duration-150 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-dim)]"
           />
         </label>
 
@@ -131,7 +131,7 @@ export default function EventEditor({ form, onChange }) {
                 className={[
                   'flex-1 rounded-[6px] px-3 py-1.5 text-xs transition-all duration-150',
                   active
-                    ? 'bg-[var(--accent)] font-medium text-[var(--bg)]'
+                    ? 'bg-[var(--select)] font-medium text-[var(--text)]'
                     : 'text-[var(--muted)] hover:text-[var(--text)]',
                 ].join(' ')}
               >
@@ -177,7 +177,7 @@ export default function EventEditor({ form, onChange }) {
 
       <div className="min-w-0">
         <div className="mb-6">
-          <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+          <span className="t-label mb-2 block">
             Обложка
           </span>
           <EventImageUpload
@@ -187,13 +187,13 @@ export default function EventEditor({ form, onChange }) {
             onRemove={() => set({ image_file: null, image_url: null })}
           />
           <p className="mt-2 text-xs text-[var(--muted2)]">
-            Появится кружком на карточке в афише.
+            Станет фоном афиши — в списке и на странице события.
           </p>
         </div>
 
         {isSuperadmin && (
           <div className="mb-6">
-            <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+            <span className="t-label mb-2 block">
               PDF шаблон
             </span>
             <TemplatePicker

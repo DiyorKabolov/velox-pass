@@ -12,9 +12,12 @@ function socketUrl(sessionId) {
 /**
  * Seat map for one session, kept current by a WebSocket.
  *
- * The initial map comes over HTTP; the socket only carries deltas, so a
- * dropped connection degrades to stale data rather than an empty screen. It
- * reconnects on its own after RETRY_MS.
+ * The map comes over HTTP; the socket only carries deltas, so a dropped
+ * connection degrades to stale data rather than an empty screen. It
+ * reconnects on its own after RETRY_MS -- and every time it (re)connects the
+ * map is fetched again, because whatever sold while it was down was announced
+ * to nobody. So is it when the tab comes back into view: a phone that slept
+ * with the picker open has missed everything, including seats given back.
  */
 export function useSessionSeats(sessionId) {
   const [map, setMap] = useState(null)
@@ -26,16 +29,34 @@ export function useSessionSeats(sessionId) {
   const socketRef = useRef(null)
   const retryRef = useRef(null)
   const closedByUs = useRef(false)
+  // Only the latest request may write the map: an older one landing last
+  // would put back seats sold in between.
+  const generation = useRef(0)
+  // Seats announced as taken while a request was in flight. Its snapshot may
+  // predate them, so they are taken again once it lands.
+  const takenMeanwhile = useRef(new Set())
 
   const refetch = useCallback(async () => {
     if (!sessionId) return
+    const mine = ++generation.current
+    takenMeanwhile.current = new Set()
     try {
-      setMap(await getSessionSeats(sessionId))
+      const next = await getSessionSeats(sessionId)
+      if (mine !== generation.current) return
+      const taken = takenMeanwhile.current
+      setMap(
+        taken.size
+          ? {
+              ...next,
+              seats: next.seats.map((seat) => (taken.has(seat.id) ? { ...seat, is_taken: true } : seat)),
+            }
+          : next,
+      )
       setError(null)
     } catch {
-      setError('Не удалось загрузить схему зала')
+      if (mine === generation.current) setError('Не удалось загрузить схему зала')
     } finally {
-      setLoading(false)
+      if (mine === generation.current) setLoading(false)
     }
   }, [sessionId])
 
@@ -62,7 +83,12 @@ export function useSessionSeats(sessionId) {
       }
       socketRef.current = socket
 
-      socket.onopen = () => setConnected(true)
+      socket.onopen = () => {
+        setConnected(true)
+        // Including the first time: a seat sold between the map's request
+        // and this moment was announced before anyone here was listening.
+        refetch()
+      }
 
       socket.onmessage = (event) => {
         let payload
@@ -73,6 +99,7 @@ export function useSessionSeats(sessionId) {
         }
 
         if (payload.type === 'seat_taken') {
+          takenMeanwhile.current.add(payload.seat_id)
           setMap((current) =>
             current
               ? {
@@ -101,9 +128,15 @@ export function useSessionSeats(sessionId) {
 
     open()
 
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refetch()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
     return () => {
       closedByUs.current = true
       clearTimeout(retryRef.current)
+      document.removeEventListener('visibilitychange', onVisible)
       socketRef.current?.close()
       socketRef.current = null
       setConnected(false)

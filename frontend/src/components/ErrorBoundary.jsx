@@ -33,37 +33,42 @@ export default class ErrorBoundary extends Component {
     if (!error) return this.props.children
 
     return (
-      <div className="flex min-h-dvh items-center justify-center px-5 py-16">
-        <div className="w-full max-w-md rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
-          <AlertTriangle size={26} className="mx-auto mb-4 text-[var(--err)]" />
-          <h1 className="font-display text-lg tracking-tight">Что-то пошло не так</h1>
-          <p className="mt-3 text-sm text-[var(--muted)]">
+      <div className="flex min-h-dvh items-center px-5 py-16 sm:px-10">
+        <div className="mx-auto w-full max-w-2xl">
+          <p className="t-label flex items-center gap-2 text-[var(--err)]">
+            <AlertTriangle size={14} strokeWidth={1.75} />
+            Ошибка интерфейса
+          </p>
+          <h1 className="t-poster mt-4 text-[clamp(56px,10vw,112px)] text-[var(--text)]">
+            Что-то пошло не так
+          </h1>
+          <p className="mt-6 max-w-lg text-[16px] leading-relaxed text-[var(--muted)]">
             Страница не смогла отрисоваться. Остальной сайт работает — вернитесь на
             главную или обновите страницу.
           </p>
 
           {/* The message itself, not a stack: enough to report the problem
               without turning the page into a debugger. */}
-          <p className="mt-4 break-words rounded-[var(--radius-sm)] bg-[var(--surface2)] px-3 py-2 font-mono2 text-[11px] text-[var(--muted2)]">
+          <p className="mt-6 break-words border-l-2 border-[var(--border2)] py-1 pl-4 font-mono2 text-[12px] text-[var(--muted2)]">
             {String(error?.message || error)}
           </p>
 
-          <div className="mt-6 flex justify-center gap-3">
+          <div className="mt-10 flex flex-wrap gap-3">
             {/* A full navigation, not a router push: the tree is already torn
                 down, and only a reload is guaranteed to rebuild it. */}
             <button
               type="button"
-              onClick={() => window.location.assign('/')}
-              className="rounded-[var(--radius-sm)] border border-[var(--border2)] px-4 py-2 text-sm text-[var(--muted)] transition-colors duration-150 hover:text-[var(--text)]"
+              onClick={() => window.location.reload()}
+              className="h-12 rounded-[var(--radius-sm)] bg-[var(--accent)] px-6 text-[15px] font-medium text-[var(--accent-ink)] transition-colors duration-200 hover:bg-[var(--accent-hover)]"
             >
-              На главную
+              Обновить
             </button>
             <button
               type="button"
-              onClick={() => window.location.reload()}
-              className="rounded-[var(--radius-sm)] bg-[var(--accent)] px-4 py-2 text-sm font-medium text-[var(--bg)]"
+              onClick={() => window.location.assign('/')}
+              className="h-12 rounded-[var(--radius-sm)] border border-[var(--border2)] px-6 text-[15px] text-[var(--text)] transition-colors duration-200 hover:bg-[var(--surface2)]"
             >
-              Обновить
+              На главную
             </button>
           </div>
         </div>

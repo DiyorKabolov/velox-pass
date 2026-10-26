@@ -6,13 +6,15 @@ import { getInvite, respondToInvite } from '../api/friends'
 import useAuth from '../hooks/useAuth'
 import Avatar from '../components/ui/Avatar'
 import Button from '../components/ui/Button'
+import { CONTAINER } from '../components/ui/Page'
+import { Reveal } from '../components/motion/Motion'
 
 function Card({ children }) {
   return (
-    <div className="mx-auto max-w-md px-5 py-20">
-      <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+    <div className={`${CONTAINER} grid min-h-[72vh] place-items-center py-16`}>
+      <Reveal className="w-full max-w-md rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-7 py-9 text-center sm:px-9">
         {children}
-      </div>
+      </Reveal>
     </div>
   )
 }
@@ -53,7 +55,7 @@ export default function FriendInvite() {
   if (!token) {
     return (
       <Card>
-        <p className="text-sm text-[var(--err)]">В ссылке нет приглашения.</p>
+        <p className="text-[15px] text-[var(--err)]">В ссылке нет приглашения.</p>
       </Card>
     )
   }
@@ -61,7 +63,7 @@ export default function FriendInvite() {
   if (isLoading) {
     return (
       <Card>
-        <div className="mx-auto h-24 animate-pulse rounded-[var(--radius-sm)] bg-[var(--surface2)]" />
+        <div className="skeleton mx-auto h-24 rounded-[var(--radius-sm)]" />
       </Card>
     )
   }
@@ -69,8 +71,8 @@ export default function FriendInvite() {
   if (error || !invite) {
     return (
       <Card>
-        <h1 className="font-display text-lg">Приглашение не найдено</h1>
-        <p className="mt-3 text-sm text-[var(--muted)]">
+        <h1 className="font-display text-[30px] font-bold uppercase leading-[1.02] text-[var(--text)]">Приглашение не найдено</h1>
+        <p className="mt-3 text-[15px] leading-relaxed text-[var(--muted)]">
           Ссылка неверна или устарела — например, запрос отправили заново.
         </p>
       </Card>
@@ -82,10 +84,14 @@ export default function FriendInvite() {
   if (done) {
     return (
       <Card>
-        <h1 className="font-display text-lg">
+        <h1 className="font-display text-[30px] font-bold uppercase leading-[1.02] text-[var(--text)]">
           {done === 'accepted' ? `Вы теперь друзья с ${name}` : 'Запрос отклонён'}
         </h1>
-        <Link to="/login" className="mt-5 inline-block text-sm text-[var(--accent)]">
+        <Link
+          to="/login"
+          state={done === 'accepted' ? { from: '/cabinet?tab=friends' } : undefined}
+          className="t-link mt-6 inline-block text-[15px] text-[var(--text)]"
+        >
           Войти в Velox Pass
         </Link>
       </Card>
@@ -95,9 +101,9 @@ export default function FriendInvite() {
   if (invite.status !== 'pending') {
     return (
       <Card>
-        <Avatar username={name} src={invite.requester.avatar_url} size={64} className="mx-auto" />
-        <h1 className="mt-4 font-display text-lg">На это приглашение уже ответили</h1>
-        <p className="mt-3 text-sm text-[var(--muted)]">
+        <Avatar username={name} src={invite.requester.avatar_url} size={72} className="mx-auto" />
+        <h1 className="mt-6 font-display text-[30px] font-bold uppercase leading-[1.02] text-[var(--text)]">На это приглашение уже ответили</h1>
+        <p className="mt-3 text-[15px] leading-relaxed text-[var(--muted)]">
           {invite.status === 'accepted' ? `Вы уже друзья с ${name}.` : 'Запрос был отклонён.'}
         </p>
       </Card>
@@ -106,11 +112,13 @@ export default function FriendInvite() {
 
   return (
     <Card>
-      <Avatar username={name} src={invite.requester.avatar_url} size={64} className="mx-auto" />
-      <h1 className="mt-4 font-display text-lg">{name} приглашает вас в друзья</h1>
-      <p className="mt-2 text-sm text-[var(--muted)]">для {invite.addressee_username} на Velox Pass</p>
+      <Avatar username={name} src={invite.requester.avatar_url} size={72} className="mx-auto" />
+      <h1 className="mt-6 font-display text-[30px] font-bold uppercase leading-[1.02] text-[var(--text)]">
+        {name} приглашает вас в друзья
+      </h1>
+      <p className="mt-3 text-[15px] text-[var(--muted)]">для {invite.addressee_username} на Velox Pass</p>
 
-      <div className="mt-6 flex justify-center gap-3">
+      <div className="mt-8 flex justify-center gap-3">
         {['accept', 'decline'].map((action) => (
           <Button
             key={action}
@@ -126,7 +134,7 @@ export default function FriendInvite() {
       </div>
 
       {answer.error && (
-        <p className="mt-4 text-sm text-[var(--err)]">
+        <p className="mt-5 text-[14px] text-[var(--err)]">
           {apiError(answer.error, 'Не удалось ответить на приглашение')}
         </p>
       )}

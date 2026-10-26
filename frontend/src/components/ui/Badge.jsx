@@ -1,24 +1,13 @@
+/**
+ * A state, stamped in small capitals: colour on a faint wash of itself, no
+ * outline, a corner just off square. A spent ticket is not an error, so it
+ * reads in plain grey rather than in the alarm colour.
+ */
 const TONES = {
-  ok: {
-    color: 'var(--ok)',
-    background: 'var(--ok-bg)',
-    borderColor: 'rgba(74, 222, 128, 0.35)',
-  },
-  expired: {
-    color: 'var(--muted)',
-    background: 'rgba(122, 127, 136, 0.10)',
-    borderColor: 'var(--border2)',
-  },
-  used: {
-    color: 'var(--err)',
-    background: 'var(--err-bg)',
-    borderColor: 'rgba(248, 113, 113, 0.35)',
-  },
-  warn: {
-    color: 'var(--warn)',
-    background: 'rgba(251, 191, 36, 0.10)',
-    borderColor: 'rgba(251, 191, 36, 0.35)',
-  },
+  ok: { color: 'var(--ok)', background: 'var(--ok-bg)' },
+  expired: { color: 'var(--muted)', background: 'rgba(163, 157, 147, 0.1)' },
+  used: { color: 'var(--muted2)', background: 'rgba(111, 106, 98, 0.14)' },
+  warn: { color: 'var(--warn)', background: 'var(--warn-bg)' },
 }
 
 export default function Badge({ tone = 'ok', children, className = '' }) {
@@ -26,8 +15,8 @@ export default function Badge({ tone = 'ok', children, className = '' }) {
     <span
       style={TONES[tone] ?? TONES.ok}
       className={[
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1',
-        'font-mono2 text-[10px] uppercase tracking-[0.14em]',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-[3px] px-1.5 py-[3px]',
+        'text-[10.5px] font-semibold uppercase leading-none tracking-[0.06em]',
         className,
       ].join(' ')}
     >

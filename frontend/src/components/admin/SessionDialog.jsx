@@ -63,7 +63,7 @@ export default function SessionDialog({ form, onChange, onClose, events, lockedE
         <div className="space-y-4">
           {!lockedEvent && (
             <label className="block">
-              <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+              <span className="t-label mb-2 block">
                 Мероприятие
               </span>
               <Select

@@ -15,16 +15,20 @@ import {
 } from '../../utils/ticketGroups'
 import Badge from '../../components/ui/Badge'
 import Input from '../../components/ui/Input'
+import { AnimatedNumber } from '../../components/motion/Motion'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
+/** A figure under a rule; `color` marks only the icon beside its label. */
 function Stat({ icon: Icon, label, value, color }) {
   return (
-    <div className="flex items-center gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-      <Icon size={18} style={{ color }} className="shrink-0" />
-      <div className="min-w-0">
-        <p className="font-mono2 text-lg leading-none text-[var(--text)]">{value}</p>
-        <p className="mt-1 text-xs text-[var(--muted)]">{label}</p>
-      </div>
+    <div className="border-t border-[var(--border)] pt-4">
+      <p className="t-label flex items-center gap-2">
+        <Icon size={14} strokeWidth={1.75} style={{ color }} className="shrink-0" />
+        {label}
+      </p>
+      <p className="t-poster mt-3 text-[clamp(36px,4vw,52px)] text-[var(--text)]">
+        <AnimatedNumber value={value} />
+      </p>
     </div>
   )
 }
@@ -116,21 +120,32 @@ function EventGroup({ group, buyers, open, onToggle }) {
         />
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[var(--text)]">{group.title}</span>
+          <span className="block truncate font-display text-[17px] font-bold uppercase leading-tight text-[var(--text)]">
+            {group.title}
+          </span>
           <span className="block truncate text-xs text-[var(--muted2)]">
             {group.date ? formatDate(group.date) : 'Дата не указана'}
           </span>
         </span>
 
-        <span className="hidden shrink-0 items-center gap-3 font-mono2 text-[11px] sm:flex">
-          <span className="text-[var(--ok)]">✓ {group.stats.ok}</span>
-          <span className="text-[var(--err)]">✗ {group.stats.used}</span>
+        <span className="t-num hidden shrink-0 items-center gap-4 text-[12px] text-[var(--muted)] sm:flex">
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--ok)]" />
+            активных {group.stats.ok}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[var(--muted2)]" />
+            погашено {group.stats.used}
+          </span>
           {group.stats.expired > 0 && (
-            <span className="text-[var(--muted)]">⏱ {group.stats.expired}</span>
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full border border-[var(--muted2)]" />
+              истекло {group.stats.expired}
+            </span>
           )}
         </span>
 
-        <span className="shrink-0 rounded-full border border-[var(--border2)] px-2.5 py-1 font-mono2 text-[10px] text-[var(--muted)]">
+        <span className="shrink-0 rounded-[3px] border border-[var(--border2)] px-2.5 py-1 font-mono2 text-[10px] text-[var(--muted)]">
           {pluralize(group.stats.total, 'билет', 'билета', 'билетов')}
         </span>
       </button>
@@ -177,7 +192,7 @@ export default function Tickets() {
 
   return (
     <AdminLayout title="Билеты" subtitle="Билеты, сгруппированные по мероприятиям.">
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-10 grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           icon={TicketIcon}
           label="Всего билетов"
@@ -199,7 +214,7 @@ export default function Tickets() {
       </div>
 
       {isLoading ? (
-        <div className="h-48 animate-pulse rounded-[var(--radius)] bg-[var(--surface)]" />
+        <div className="h-48 skeleton rounded-[var(--radius)]" />
       ) : searching ? (
         // A search cuts across events, so the grouping is dropped and the event
         // is shown as a column instead.

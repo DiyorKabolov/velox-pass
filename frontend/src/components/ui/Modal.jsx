@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X } from 'lucide-react'
+import { EASE_OUT } from '../motion/Motion'
 
 /**
  * Centred dialog rendered in a portal, so it is never clipped by a scrolling
@@ -45,11 +46,10 @@ export default function Modal({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm sm:items-center sm:p-6"
+          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-[rgba(8,7,6,0.78)] p-4 sm:items-center sm:p-6"
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
+          animate={{ opacity: 1, transition: { duration: 0.22 } }}
+          exit={{ opacity: 0, transition: { duration: 0.18, delay: 0.04 } }}
           onMouseDown={(event) => {
             // Only a press that starts on the backdrop closes: dragging a text
             // selection out of the dialog must not dismiss it.
@@ -60,33 +60,34 @@ export default function Modal({
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className={`my-auto w-full ${SIZES[size] ?? SIZES.lg} overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[0_24px_70px_rgba(0,0,0,0.55)]`}
-            initial={{ opacity: 0, y: 18, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.985 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+            className={`my-auto w-full ${SIZES[size] ?? SIZES.lg} overflow-hidden rounded-[var(--radius)] border border-[var(--border2)] bg-[var(--surface)] shadow-[0_40px_80px_-24px_rgba(0,0,0,0.85)]`}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0, transition: { duration: 0.42, ease: EASE_OUT } }}
+            exit={{ opacity: 0, y: 12, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] } }}
           >
-            <header className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-6 py-4">
+            <header className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-6 pb-4 pt-5">
               <div className="min-w-0">
-                <h2 className="font-display text-base text-[var(--text)]">{title}</h2>
+                <h2 className="font-display text-[24px] font-bold uppercase leading-[1.05] text-[var(--text)]">
+                  {title}
+                </h2>
                 {subtitle && (
-                  <p className="mt-1 truncate text-sm text-[var(--muted)]">{subtitle}</p>
+                  <p className="mt-1.5 truncate text-[14px] text-[var(--muted)]">{subtitle}</p>
                 )}
               </div>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Закрыть"
-                className="shrink-0 rounded-[var(--radius-sm)] border border-[var(--border)] p-2 text-[var(--muted)] transition-all duration-150 hover:border-[var(--border2)] hover:text-[var(--text)] active:scale-[0.92]"
+                className="-mr-2 -mt-1 shrink-0 rounded-[var(--radius-sm)] p-2 text-[var(--muted)] transition-[color,background-color,transform] duration-200 hover:bg-[var(--surface2)] hover:text-[var(--text)] active:scale-[0.92]"
               >
-                <X size={15} />
+                <X size={18} strokeWidth={1.75} />
               </button>
             </header>
 
             <div className="max-h-[70vh] overflow-y-auto px-6 py-5">{children}</div>
 
             {footer && (
-              <footer className="flex items-center justify-end gap-3 border-t border-[var(--border)] px-6 py-4">
+              <footer className="flex items-center justify-end gap-3 border-t border-[var(--border)] bg-[var(--bg)] px-6 py-4">
                 {footer}
               </footer>
             )}

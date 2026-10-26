@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Camera, CameraOff, Check, X } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Html5Qrcode } from 'html5-qrcode'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useScanTicket } from '../hooks/useScanner'
 import { formatDateTime } from '../utils/dates'
+import Logo from '../components/layout/Logo'
 
 const READER_ID = 'velox-qr-reader'
 const COOLDOWN_MS = 3000
@@ -125,15 +128,25 @@ export function shutDownCamera(qr) {
 }
 
 function Brackets() {
-  const corner =
-    'absolute h-9 w-9 border-[var(--accent)] transition-colors duration-200'
+  const reduce = useReducedMotion()
+  const corner = 'absolute h-10 w-10 border-[#f1ece3]'
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="relative aspect-square w-[68vw] max-w-[290px]">
-        <span className={`${corner} left-0 top-0 rounded-tl-xl border-l-[3px] border-t-[3px]`} />
-        <span className={`${corner} right-0 top-0 rounded-tr-xl border-r-[3px] border-t-[3px]`} />
-        <span className={`${corner} bottom-0 left-0 rounded-bl-xl border-b-[3px] border-l-[3px]`} />
-        <span className={`${corner} bottom-0 right-0 rounded-br-xl border-b-[3px] border-r-[3px]`} />
+      <div className="relative aspect-square w-[68vw] max-w-[300px]">
+        <span className={`${corner} left-0 top-0 rounded-tl-[10px] border-l-2 border-t-2`} />
+        <span className={`${corner} right-0 top-0 rounded-tr-[10px] border-r-2 border-t-2`} />
+        <span className={`${corner} bottom-0 left-0 rounded-bl-[10px] border-b-2 border-l-2`} />
+        <span className={`${corner} bottom-0 right-0 rounded-br-[10px] border-b-2 border-r-2`} />
+        {/* The one moving thing on a waiting screen: a slow sweep that says
+            the camera is looking. Left out when motion is turned down. */}
+        {!reduce && (
+          <motion.span
+            className="absolute inset-x-3 h-px bg-[var(--accent)] shadow-[0_0_12px_rgba(255,91,46,0.8)]"
+            initial={{ top: '12%' }}
+            animate={{ top: ['12%', '88%', '12%'] }}
+            transition={{ duration: 3.2, ease: 'easeInOut', repeat: Infinity }}
+          />
+        )}
       </div>
     </div>
   )
@@ -141,6 +154,15 @@ function Brackets() {
 
 export default function Scanner() {
   const scan = useScanTicket()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // Back to wherever the scanner was opened from; opened straight from a link
+  // or a home-screen icon there is nothing behind it, so to the start.
+  const leave = () => {
+    if (location.key === 'default') navigate('/', { replace: true })
+    else navigate(-1)
+  }
 
   const [running, setRunning] = useState(false)
   const [error, setError] = useState(null)
@@ -270,91 +292,106 @@ export default function Scanner() {
       {flash && <div className="pointer-events-none absolute inset-0 bg-white/70" />}
 
       {/* Top bar */}
-      <div className="relative z-10 flex items-center justify-between px-5 pt-5">
-        <span className="font-display text-sm tracking-[0.18em] text-white drop-shadow">
-          VELOX<span className="text-[var(--accent)]">·</span>PASS
-        </span>
-        <span
-          title={`Отсканировано: ${count}`}
-          className="flex items-center gap-2 rounded-full bg-black/55 px-3 py-1.5 backdrop-blur"
-        >
-          {running ? (
-            <Camera size={14} className="text-[var(--ok)]" />
-          ) : (
-            <CameraOff size={14} className="text-[var(--muted)]" />
-          )}
-          <span className="text-xs text-white/70">Отсканировано</span>
-          <span className="font-mono2 text-xs font-semibold text-white">{count}</span>
-        </span>
+      <div className="relative z-10 flex items-center justify-between gap-4 bg-gradient-to-b from-black/70 to-transparent px-5 pb-10 pt-5">
+        <Logo className="text-[22px] text-[#f1ece3]" />
+        <div className="flex items-center gap-5">
+          <span
+            title={`Отсканировано: ${count}`}
+            className="flex items-center gap-2.5 text-[13px] text-white/75"
+          >
+            {running ? (
+              <Camera size={15} strokeWidth={1.75} className="text-[var(--ok)]" />
+            ) : (
+              <CameraOff size={15} strokeWidth={1.75} className="text-white/50" />
+            )}
+            <span className="hidden sm:inline">Отсканировано</span>
+            <span className="t-poster t-num text-[24px] leading-none text-white">{count}</span>
+          </span>
+          {/* The scanner covers the whole screen, navigation included, and an
+              installed app on a phone may have no back button of its own. */}
+          <button
+            type="button"
+            onClick={leave}
+            aria-label="Закрыть сканер"
+            className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white transition-[background-color,transform] duration-200 hover:bg-white/20 active:scale-[0.94]"
+          >
+            <X size={20} strokeWidth={1.75} />
+          </button>
+        </div>
       </div>
 
       {error && (
-        <div className="relative z-10 m-auto max-w-xs rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-6 text-center">
-          <CameraOff size={26} className="mx-auto mb-3 text-[var(--err)]" />
-          <p className="text-sm text-[var(--text)]">{error}</p>
+        <div className="relative z-10 m-auto max-w-xs rounded-[var(--radius)] border border-[var(--border2)] bg-[var(--surface)] p-7">
+          <CameraOff size={24} strokeWidth={1.5} className="text-[var(--err)]" />
+          <p className="mt-4 font-display text-[22px] font-bold uppercase leading-none text-[var(--text)]">
+            Камера недоступна
+          </p>
+          <p className="mt-3 text-[14px] leading-relaxed text-[var(--muted)]">{error}</p>
         </div>
       )}
 
       {!error && (
-        <div className="relative z-10 mt-auto px-6 pb-8 text-center">
+        <div className="relative z-10 mt-auto bg-gradient-to-t from-black/70 to-transparent px-6 pb-10 pt-16 text-center">
           {frontCamera ? (
-            <p className="mx-auto max-w-xs rounded-[var(--radius-sm)] bg-black/60 px-4 py-3 text-sm text-white/85 backdrop-blur">
+            <p className="mx-auto max-w-xs rounded-[var(--radius-sm)] bg-black/70 px-4 py-3 text-[14px] leading-relaxed text-white/85">
               Задняя камера недоступна. Фронтальная часто отдаёт зеркальный кадр —
               такой QR-код не читается. Откройте сканер на телефоне.
             </p>
           ) : (
-            <p className="text-sm text-white/70 drop-shadow">
-              Наведите камеру на QR-код билета
-            </p>
+            <p className="text-[15px] text-white/75">Наведите камеру на QR-код билета</p>
           )}
         </div>
       )}
 
-      {/* Result overlay */}
-      {result && (
-        <div
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center px-6 text-center"
-          style={{
-            background: result.ok
-              ? 'rgba(22, 101, 52, 0.94)'
-              : 'rgba(127, 29, 29, 0.94)',
-          }}
-        >
-          <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-white/15">
-            {result.ok ? (
-              <Check size={44} className="text-white" strokeWidth={3} />
-            ) : (
-              <X size={44} className="text-white" strokeWidth={3} />
-            )}
-          </div>
-
-          <p className="font-display text-2xl text-white">
-            {result.ok ? 'Билет действителен' : 'Отказано'}
-          </p>
-          <p className="mt-2 max-w-xs text-sm text-white/80">{result.message}</p>
-
-          {ticket && (
-            <div className="mt-6 w-full max-w-xs rounded-[var(--radius)] bg-black/25 p-4 text-left">
-              <p className="truncate text-base font-semibold text-white">
-                {ticket.event_title}
-              </p>
-              <p className="mt-1 text-sm text-white/70">
-                {formatDateTime(ticket.event_date)}
-              </p>
-              {ticket.seat_label && (
-                <p className="mt-0.5 text-sm text-white/70">Место: {ticket.seat_label}</p>
+      {/* Result overlay: the verdict fills the screen, readable at arm's length. */}
+      <AnimatePresence>
+        {result && (
+          <motion.div
+            key={result.ticket?.ticket_id ?? result.message}
+            initial={{ opacity: 0, scale: 1.03 }}
+            animate={{ opacity: 1, scale: 1, transition: { duration: 0.16 } }}
+            exit={{ opacity: 0, transition: { duration: 0.2 } }}
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center px-6 text-center"
+            style={{
+              background: result.ok ? 'rgba(14, 82, 44, 0.96)' : 'rgba(118, 20, 28, 0.96)',
+            }}
+          >
+            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full border-2 border-white/80">
+              {result.ok ? (
+                <Check size={40} className="text-white" strokeWidth={2.5} />
+              ) : (
+                <X size={40} className="text-white" strokeWidth={2.5} />
               )}
-              <p className="mt-2 font-mono2 text-xs text-white/60">{ticket.ticket_id}</p>
             </div>
-          )}
 
-          {!result.ok && result.used_at && (
-            <p className="mt-4 font-mono2 text-xs text-white/70">
-              Погашен: {formatDateTime(result.used_at)}
+            <p className="t-poster text-[clamp(48px,14vw,96px)] text-white">
+              {result.ok ? 'Билет действителен' : 'Отказано'}
             </p>
-          )}
-        </div>
-      )}
+            <p className="mt-4 max-w-xs text-[15px] text-white/85">{result.message}</p>
+
+            {ticket && (
+              <div className="mt-8 w-full max-w-xs border-t border-dashed border-white/40 pt-5 text-left">
+                <p className="truncate font-display text-[22px] font-bold uppercase leading-tight text-white">
+                  {ticket.event_title}
+                </p>
+                <p className="t-num mt-1.5 text-[14px] text-white/75">
+                  {formatDateTime(ticket.event_date)}
+                </p>
+                {ticket.seat_label && (
+                  <p className="mt-0.5 text-[14px] text-white/75">Место: {ticket.seat_label}</p>
+                )}
+                <p className="mt-3 font-mono2 text-[11px] text-white/60">{ticket.ticket_id}</p>
+              </div>
+            )}
+
+            {!result.ok && result.used_at && (
+              <p className="t-num mt-5 font-mono2 text-[11px] text-white/70">
+                Погашен: {formatDateTime(result.used_at)}
+              </p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

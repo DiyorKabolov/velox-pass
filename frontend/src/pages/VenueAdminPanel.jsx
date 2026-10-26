@@ -9,7 +9,6 @@ import {
   Plus,
   Ticket as TicketIcon,
   Trash2,
-  Users,
   Wallet,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -32,6 +31,9 @@ import { pluralize } from '../utils/plural'
 import { capacityLabel, sessionsLabel } from '../utils/capacity'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import { CONTAINER, PageHeader } from '../components/ui/Page'
+import { Tabs } from '../components/ui/Tabs'
+import { AnimatedNumber } from '../components/motion/Motion'
 import SeatMap from '../components/seats/SeatMap'
 import Modal from '../components/ui/Modal'
 import { RoleBadge } from '../components/admin/VenueStaff'
@@ -67,25 +69,6 @@ const PRICE_CATEGORIES = [
   { key: 'balcony', label: 'Балкон' },
 ]
 
-function Tab({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-selected={active}
-      role="tab"
-      className={[
-        'rounded-[var(--radius-sm)] px-3.5 py-1.5 text-sm transition-colors duration-150',
-        active
-          ? 'bg-[var(--surface2)] text-[var(--text)]'
-          : 'text-[var(--muted)] hover:text-[var(--text)]',
-      ].join(' ')}
-    >
-      {children}
-    </button>
-  )
-}
-
 function Panel({ children, className = '' }) {
   return (
     <div
@@ -97,18 +80,21 @@ function Panel({ children, className = '' }) {
 }
 
 function Empty({ children }) {
-  return <p className="px-4 py-8 text-center text-sm text-[var(--muted)]">{children}</p>
+  return <p className="px-5 py-8 text-[15px] text-[var(--muted)]">{children}</p>
 }
 
+/** A figure under a rule. `color` tints only the small icon beside the label. */
 function Stat({ icon: Icon, label, value, color }) {
   return (
-    <Panel className="flex items-center gap-3 px-4 py-3">
-      <Icon size={18} style={{ color }} className="shrink-0" />
-      <div className="min-w-0">
-        <p className="font-mono2 text-lg leading-none text-[var(--text)]">{value}</p>
-        <p className="mt-1 text-xs text-[var(--muted)]">{label}</p>
-      </div>
-    </Panel>
+    <div className="border-t border-[var(--border)] pt-4">
+      <p className="t-label flex items-center gap-2">
+        <Icon size={14} strokeWidth={1.75} style={{ color }} className="shrink-0" />
+        {label}
+      </p>
+      <p className="t-poster mt-3 text-[clamp(36px,4vw,52px)] text-[var(--text)]">
+        <AnimatedNumber value={value} />
+      </p>
+    </div>
   )
 }
 
@@ -168,7 +154,7 @@ function EventsTab({ events, isLoading }) {
     </div>
   )
 
-  if (isLoading) return <Panel className="h-40 animate-pulse" />
+  if (isLoading) return <Panel className="skeleton h-40" />
   if (!events?.length) {
     return (
       <>
@@ -280,7 +266,7 @@ function HallsTab({ venues }) {
     enabled: Boolean(viewing),
   })
 
-  if (hallQueries.some((q) => q.isLoading)) return <Panel className="h-40 animate-pulse" />
+  if (hallQueries.some((q) => q.isLoading)) return <Panel className="skeleton h-40" />
 
   const rows = (venues ?? []).flatMap((venue, index) =>
     (hallQueries[index]?.data ?? []).map((item) => ({ ...item, venueName: venue.name })),
@@ -299,7 +285,7 @@ function HallsTab({ venues }) {
       <div className="space-y-2">
         {rows.map((item) => (
           <Panel key={item.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-            <Grid3x3 size={15} className="shrink-0 text-[var(--accent)]" />
+            <Grid3x3 size={15} className="shrink-0 text-[var(--muted)]" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm">{item.name}</p>
               <p className="mt-0.5 text-xs text-[var(--muted2)]">{item.venueName}</p>
@@ -335,7 +321,7 @@ function SessionsTab({ events, isLoading }) {
   // administrator's own, so the dialog cannot offer anyone else's.
   const [form, setForm] = useState(null)
 
-  if (isLoading) return <Panel className="h-40 animate-pulse" />
+  if (isLoading) return <Panel className="skeleton h-40" />
 
   return (
     <>
@@ -358,14 +344,8 @@ function SessionsTab({ events, isLoading }) {
         </Panel>
       )}
 
-      {form && (
-        <SessionDialog
-          form={form}
-          events={events}
-          onChange={setForm}
-          onClose={() => setForm(null)}
-        />
-      )}
+      {/* Always mounted and only opened and closed, so it can animate out. */}
+      <SessionDialog form={form} events={events} onChange={setForm} onClose={() => setForm(null)} />
     </>
   )
 }
@@ -378,7 +358,7 @@ function StaffTab() {
     queryFn: getMyStaff,
   })
 
-  if (isLoading) return <Panel className="h-32 animate-pulse" />
+  if (isLoading) return <Panel className="skeleton h-32" />
 
   return (
     <>
@@ -432,7 +412,7 @@ function OverviewTab({ venues, events }) {
     queryFn: () => getMyRecentTickets(10),
   })
 
-  if (isLoading) return <Panel className="h-40 animate-pulse" />
+  if (isLoading) return <Panel className="skeleton h-40" />
 
   const breakdown = stats?.venues ?? []
   const several = breakdown.length > 1
@@ -477,9 +457,9 @@ function OverviewTab({ venues, events }) {
                 aria-selected={active}
                 onClick={() => setSelected(option.key)}
                 className={[
-                  'rounded-full border px-4 py-1.5 text-xs transition-colors duration-150',
+                  'rounded-[3px] border px-4 py-1.5 text-xs transition-colors duration-150',
                   active
-                    ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--text)]'
+                    ? 'border-[var(--text)] bg-[var(--surface2)] text-[var(--text)]'
                     : 'border-[var(--border)] text-[var(--muted)] hover:text-[var(--text)]',
                 ].join(' ')}
               >
@@ -490,7 +470,7 @@ function OverviewTab({ venues, events }) {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           icon={CalendarDays}
           label="Мероприятий"
@@ -519,7 +499,7 @@ function OverviewTab({ venues, events }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section>
-          <p className="mb-3 font-mono2 text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
+          <p className="mb-3 t-label">
             Ближайшие мероприятия
           </p>
           {nextEvents.length ? (
@@ -546,7 +526,7 @@ function OverviewTab({ venues, events }) {
         </section>
 
         <section>
-          <p className="mb-3 font-mono2 text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
+          <p className="mb-3 t-label">
             Предстоящие сеансы
           </p>
           {upcoming.length ? (
@@ -574,7 +554,7 @@ function OverviewTab({ venues, events }) {
       </div>
 
       <section>
-        <p className="mb-3 font-mono2 text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
+        <p className="mb-3 t-label">
           Последние билеты
         </p>
         {tickets?.length ? (
@@ -622,40 +602,37 @@ export default function VenueAdminPanel() {
   }, [venues])
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-12">
-      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="font-mono2 text-[11px] uppercase tracking-[0.24em] text-[var(--muted2)]">
-            Площадка
-          </p>
-          <h1 className="mt-2 font-display text-2xl tracking-tight">Моя площадка</h1>
-          <p className="mt-2 flex items-center gap-2 text-sm text-[var(--muted)]">
-            <Users size={14} className="shrink-0 opacity-70" />
-            {subtitle}
-          </p>
-        </div>
-        <Button onClick={() => navigate(NEW_EVENT_PATH)} className="shrink-0">
-          <Plus size={15} />
-          Новое мероприятие
-        </Button>
-      </header>
+    <div className={`${CONTAINER} pt-10 sm:pt-14`}>
+      <PageHeader
+        kicker="Площадка"
+        title="Моя площадка"
+        size="md"
+        lead={subtitle}
+        actions={
+          <Button onClick={() => navigate(NEW_EVENT_PATH)} className="shrink-0">
+            <Plus size={15} strokeWidth={1.75} />
+            Новое мероприятие
+          </Button>
+        }
+        rule={false}
+      />
 
-      <nav
-        role="tablist"
-        className="mb-8 flex flex-wrap gap-1 border-b border-[var(--border)] pb-3"
-      >
-        {TABS.map((item) => (
-          <Tab key={item.key} active={tab === item.key} onClick={() => setTab(item.key)}>
-            {item.label}
-          </Tab>
-        ))}
-      </nav>
+      <Tabs
+        className="mb-8 mt-8"
+        layoutId="venue-admin-tab"
+        value={tab}
+        onChange={setTab}
+        items={TABS}
+      />
 
-      {tab === 'overview' && <OverviewTab venues={venues} events={events} />}
-      {tab === 'events' && <EventsTab events={events} isLoading={eventsLoading} />}
-      {tab === 'sessions' && <SessionsTab events={events} isLoading={eventsLoading} />}
-      {tab === 'halls' && <HallsTab venues={venues} />}
-      {tab === 'staff' && <StaffTab />}
+      {/* Keyed by the tab, so each one arrives afresh when picked. */}
+      <div key={tab} className="anim-rise" style={{ '--rise': '10px' }}>
+        {tab === 'overview' && <OverviewTab venues={venues} events={events} />}
+        {tab === 'events' && <EventsTab events={events} isLoading={eventsLoading} />}
+        {tab === 'sessions' && <SessionsTab events={events} isLoading={eventsLoading} />}
+        {tab === 'halls' && <HallsTab venues={venues} />}
+        {tab === 'staff' && <StaffTab />}
+      </div>
     </div>
   )
 }

@@ -29,7 +29,7 @@ const KEY = ['admin', 'pdf-templates']
 function Num({ label, value, onChange, min = 0, step = 1 }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-1 block text-[10px] uppercase tracking-[0.1em] text-[var(--muted2)]">
+      <span className="t-label mb-1 block">
         {label}
       </span>
       <input
@@ -58,9 +58,9 @@ function ElementRow({ element, index, selected, onSelect, onPatch, onRemove }) {
     >
       <div className="mb-2 flex items-center gap-2">
         {isQr ? (
-          <QrCode size={14} className="shrink-0 text-[var(--accent)]" />
+          <QrCode size={14} className="shrink-0 text-[var(--muted)]" />
         ) : (
-          <Type size={14} className="shrink-0 text-[var(--accent)]" />
+          <Type size={14} className="shrink-0 text-[var(--muted)]" />
         )}
         <span className="min-w-0 flex-1 truncate text-sm">{elementLabel(element)}</span>
         <button
@@ -103,7 +103,7 @@ function ElementRow({ element, index, selected, onSelect, onPatch, onRemove }) {
               onChange={(font_size) => onPatch(index, { font_size })}
             />
             <label className="block min-w-0">
-              <span className="mb-1 block text-[10px] uppercase tracking-[0.1em] text-[var(--muted2)]">
+              <span className="t-label mb-1 block">
                 Цвет
               </span>
               <input
@@ -160,13 +160,41 @@ export default function PdfTemplates() {
     if (!activeId && templates?.length) setActiveId(templates[0].id)
   }, [templates, activeId])
 
-  // Load the chosen template's saved layout, dropping any unsaved edits with it.
+  // Load the chosen template's saved layout -- once per template, as soon as
+  // it is in the list. Keyed on the template actually found rather than on the
+  // id alone: a freshly uploaded template is chosen before the list holds it,
+  // and an effect that ran only when the id changed would miss it and leave
+  // the previous template's elements on the new page. The refetch after a
+  // save brings a new object for the same template, which must not throw
+  // away what is on the canvas.
+  const loadedFor = useRef(null)
   useEffect(() => {
-    if (!active) return
+    if (!active || loadedFor.current === active.id) return
+    loadedFor.current = active.id
     setLayout(parseLayout(active.layout_json))
     setSelected(null)
     setDirty(false)
-  }, [activeId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active])
+
+  // Closing or reloading the tab with edits on the canvas asks first.
+  useEffect(() => {
+    if (!dirty) return undefined
+    const warn = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  // Anything that replaces what is on the canvas asks before dropping edits.
+  const mayDiscard = () =>
+    !dirty || window.confirm('Изменения в этом шаблоне не сохранены. Продолжить без сохранения?')
+
+  const choose = (id) => {
+    if (id === activeId || !mayDiscard()) return
+    setActiveId(id)
+  }
 
   // The page image is behind the admin token, so it arrives as a blob URL that
   // has to be revoked or the browser holds every one of them for the session.
@@ -197,6 +225,12 @@ export default function PdfTemplates() {
   const upload = useMutation({
     mutationFn: ({ file, name }) => uploadTemplate(file, name),
     onSuccess: (template) => {
+      // Into the list at once, so the editor opens it with its own (empty)
+      // layout instead of waiting on the refetch.
+      queryClient.setQueryData(KEY, (list) => [
+        ...(list ?? []).filter((item) => item.id !== template.id),
+        template,
+      ])
       queryClient.invalidateQueries({ queryKey: KEY })
       setActiveId(template.id)
       toast.success(`Шаблон «${template.name}» загружен`)
@@ -205,10 +239,11 @@ export default function PdfTemplates() {
   })
 
   const save = useMutation({
-    mutationFn: (payload) => updateTemplate(activeId, payload),
-    onSuccess: () => {
+    mutationFn: ({ id, payload }) => updateTemplate(id, payload),
+    onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: KEY })
-      setDirty(false)
+      // Only if the template saved is still the one open.
+      if (id === activeId) setDirty(false)
       toast.success('Сохранено')
     },
     onError: (error) => toast.error(apiError(error, 'Не удалось сохранить')),
@@ -217,6 +252,9 @@ export default function PdfTemplates() {
   const remove = useMutation({
     mutationFn: deleteTemplate,
     onSuccess: (_, id) => {
+      // Out of the list at once: the open template falls back to the first
+      // one left, and that must not be the one just deleted.
+      queryClient.setQueryData(KEY, (list) => (list ?? []).filter((item) => item.id !== id))
       queryClient.invalidateQueries({ queryKey: KEY })
       if (id === activeId) setActiveId(null)
       toast.success('Шаблон удалён')
@@ -285,7 +323,13 @@ export default function PdfTemplates() {
             onChange={onFile}
             className="hidden"
           />
-          <Button loading={upload.isPending} onClick={() => fileInput.current?.click()}>
+          <Button
+            loading={upload.isPending}
+            onClick={() => {
+              // The new template opens as soon as it is in, replacing the canvas.
+              if (mayDiscard()) fileInput.current?.click()
+            }}
+          >
             <Upload size={15} />
             Загрузить шаблон
           </Button>
@@ -296,17 +340,17 @@ export default function PdfTemplates() {
         {/* Left: the list and every control. */}
         <div className="w-full shrink-0 space-y-6 lg:w-[400px]">
           <section>
-            <p className="mb-2 font-mono2 text-[10px] uppercase tracking-[0.16em] text-[var(--muted2)]">
+            <p className="mb-2 t-label">
               Шаблоны
             </p>
             {isLoading ? (
-              <div className="h-24 animate-pulse rounded-[var(--radius)] bg-[var(--surface)]" />
+              <div className="h-24 skeleton rounded-[var(--radius)]" />
             ) : templates?.length ? (
               <div className="space-y-2">
                 {templates.map((template) => (
                   <div
                     key={template.id}
-                    onClick={() => setActiveId(template.id)}
+                    onClick={() => choose(template.id)}
                     className={[
                       'flex cursor-pointer items-center gap-3 rounded-[var(--radius-sm)] border p-3 transition-colors duration-150',
                       template.id === activeId
@@ -318,7 +362,7 @@ export default function PdfTemplates() {
                       <p className="flex items-center gap-2 truncate text-sm">
                         {template.name}
                         {template.is_default && (
-                          <span className="shrink-0 rounded-full border border-[var(--accent)] px-2 py-0.5 text-[10px] text-[var(--accent)]">
+                          <span className="shrink-0 rounded-[3px] border border-[var(--accent)] px-2 py-0.5 text-[10px] text-[var(--accent)]">
                             По умолчанию
                           </span>
                         )}
@@ -331,6 +375,7 @@ export default function PdfTemplates() {
                       size="sm"
                       variant="danger"
                       aria-label={`Удалить ${template.name}`}
+                      loading={remove.isPending && remove.variables === template.id}
                       onClick={(event) => {
                         event.stopPropagation()
                         if (window.confirm(`Удалить шаблон «${template.name}»?`)) {
@@ -352,7 +397,7 @@ export default function PdfTemplates() {
 
           {active && (
             <section>
-              <p className="mb-2 font-mono2 text-[10px] uppercase tracking-[0.16em] text-[var(--muted2)]">
+              <p className="mb-2 t-label">
                 Настройки элементов
               </p>
 
@@ -392,16 +437,18 @@ export default function PdfTemplates() {
                 <Button
                   variant="ghost"
                   disabled={active.is_default}
-                  loading={save.isPending}
-                  onClick={() => save.mutate({ is_default: true })}
+                  loading={save.isPending && 'is_default' in save.variables.payload}
+                  onClick={() => save.mutate({ id: active.id, payload: { is_default: true } })}
                 >
                   <Star size={14} />
                   {active.is_default ? 'Уже по умолчанию' : 'Сделать основным'}
                 </Button>
                 <Button
                   disabled={!dirty}
-                  loading={save.isPending}
-                  onClick={() => save.mutate({ layout_json: serializeLayout(layout) })}
+                  loading={save.isPending && 'layout_json' in save.variables.payload}
+                  onClick={() =>
+                    save.mutate({ id: active.id, payload: { layout_json: serializeLayout(layout) } })
+                  }
                 >
                   {dirty ? 'Сохранить' : 'Сохранено'}
                 </Button>

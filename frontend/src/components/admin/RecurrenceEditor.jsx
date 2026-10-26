@@ -8,7 +8,7 @@ import { expandRule, MAX_SESSIONS, validateRule, WEEKDAYS } from '../../utils/re
 /** Section caption, matching the labels the form controls carry. */
 function Caption({ children }) {
   return (
-    <span className="mb-2 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+    <span className="t-label mb-2 block">
       {children}
     </span>
   )
@@ -66,7 +66,7 @@ export default function RecurrenceEditor({
                   'w-11 rounded-[var(--radius-sm)] border py-2 text-xs transition-all duration-150',
                   'active:scale-[0.94]',
                   active
-                    ? 'border-[var(--accent)] bg-[var(--accent)] font-medium text-[var(--bg)]'
+                    ? 'border-[var(--text)] bg-[var(--text)] font-medium text-[var(--bg)]'
                     : 'border-[var(--border)] text-[var(--muted)] hover:border-[var(--border2)] hover:text-[var(--text)]',
                 ].join(' ')}
               >
@@ -90,7 +90,7 @@ export default function RecurrenceEditor({
                 value={time}
                 aria-label={`Время ${index + 1}`}
                 onChange={(event) => setTime(index, event.target.value)}
-                className="w-[104px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-2.5 py-2 text-sm text-[var(--text)] outline-none transition-all duration-150 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25"
+                className="w-[104px] rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-2.5 py-2 text-sm text-[var(--text)] outline-none transition-all duration-150 focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-dim)]"
               />
               <button
                 type="button"
@@ -147,7 +147,7 @@ export default function RecurrenceEditor({
                   className={[
                     'flex-1 whitespace-nowrap rounded-[6px] px-2 py-1.5 text-xs transition-all duration-150',
                     active
-                      ? 'bg-[var(--accent)] font-medium text-[var(--bg)]'
+                      ? 'bg-[var(--select)] font-medium text-[var(--text)]'
                       : 'text-[var(--muted)] hover:text-[var(--text)]',
                   ].join(' ')}
                 >

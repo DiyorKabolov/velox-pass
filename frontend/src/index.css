@@ -2,31 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Velox Pass — the interface is the dark lobby of a box office: warm ink,
+   paper-white type and hairline rules. The colour belongs to the events --
+   their posters and their tickets -- so the chrome keeps to one signal colour,
+   used for the thing to press and for where you are, and to nothing else. */
 :root {
-  --bg: #1a1c1e;
-  /* The same colour as --bg, as channels. Needed because the sticky navbar and
-     footer are translucent, and an alpha variant cannot be derived from a hex
-     custom property -- see .navbar-surface below for why not in Tailwind. */
-  --bg-rgb: 26 28 30;
-  --surface: #22252a;
-  --surface2: #2a2e34;
-  --border: #32373f;
-  --border2: #42484f;
-  --text: #e8e6e0;
-  --muted: #7a7f88;
-  --muted2: #52575f;
-  --accent: #a8b8c8;
-  --accent-dim: rgba(168, 184, 200, 0.08);
-  --ok: #4ade80;
-  --ok-bg: rgba(74, 222, 128, 0.08);
-  --err: #f87171;
-  --err-bg: rgba(248, 113, 113, 0.08);
-  --warn: #fbbf24;
-  --card-bg: #fdfdf5;
-  --card-text: #2a2a2a;
-  --card-accent: #a898e0;
-  --radius: 12px;
-  --radius-sm: 8px;
+  color-scheme: dark;
+
+  --bg: #0e0d0c;
+  /* The same colour as --bg, as channels, for the few places that need an
+     alpha variant of it -- see .navbar-surface for why not in Tailwind. */
+  --bg-rgb: 14 13 12;
+  --surface: #161513;
+  --surface2: #1f1d1a;
+  --surface3: #2a2723;
+  --border: #2a2724;
+  --border2: #3d3934;
+  --text: #f1ece3;
+  --muted: #a39d93;
+  --muted2: #6f6a62;
+
+  /* Signal vermilion: primary actions, focus, the active place. */
+  --accent: #ff5b2e;
+  --accent-hover: #ff7148;
+  --accent-ink: #170803;
+  --accent-dim: rgba(255, 91, 46, 0.12);
+  /* The raised thumb of a segmented control. Neutral on purpose: a choice
+     being made is not a call to action. */
+  --select: #36322d;
+
+  --ok: #6fd08c;
+  --ok-bg: rgba(111, 208, 140, 0.1);
+  --err: #ff5d6c;
+  --err-bg: rgba(255, 93, 108, 0.1);
+  --warn: #f2b84b;
+  --warn-bg: rgba(242, 184, 75, 0.1);
+
+  --card-bg: #fbf8f1;
+  --card-text: #1d1b18;
+  --card-accent: #ff5b2e;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 html {
@@ -35,67 +55,118 @@ html {
      vanish changes the viewport width by its own thickness, and every centred
      layout jumps sideways by that much on each switch. */
   scrollbar-gutter: stable;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Golos Text', system-ui, sans-serif;
   min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 @layer base {
-  h1, h2, h3 {
-    font-family: 'Unbounded', sans-serif;
+  h1,
+  h2,
+  h3 {
+    font-family: 'Sofia Sans Condensed', 'Arial Narrow', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0;
   }
   ::selection {
     background: var(--accent);
-    color: var(--bg);
+    color: var(--accent-ink);
+  }
+  /* A visible ring for keyboard users everywhere a component did not draw
+     its own. Mouse clicks do not trigger :focus-visible on buttons. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Small capitals that name a block or a field. Kept to a modest tracking:
+     letter-spacing wide enough to notice reads as decoration, not as a label. */
+  .t-label {
+    font-family: 'Golos Text', system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* The playbill voice: condensed, black, capitals, tight. Not tighter than
+     0.92: below that the tail of a Д or Щ reaches the breve of a Й on the
+     line beneath it. */
+  .t-poster {
+    font-family: 'Sofia Sans Extra Condensed', 'Sofia Sans Condensed', 'Arial Narrow', sans-serif;
+    font-weight: 900;
+    line-height: 0.92;
+    letter-spacing: -0.004em;
+    text-transform: uppercase;
+  }
+
+  .t-num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Text links: the underline is there at rest, quiet, and firms up on hover
+     rather than appearing out of nowhere. */
+  .t-link {
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.22em;
+    text-decoration-color: var(--border2);
+    transition: text-decoration-color 160ms var(--ease-out), color 160ms var(--ease-out);
+  }
+  .t-link:hover {
+    text-decoration-color: currentColor;
+  }
+
+  /* Sticky navbar: solid ink with a hairline. It used to be translucent with a
+     blur, which let scrolled text show through it. */
+  .navbar-surface {
+    background: rgb(var(--bg-rgb) / 0.97);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* The perforation of a ticket, drawn as a column of dashes. */
+  .perforation-y {
+    background-image: linear-gradient(to bottom, currentColor 50%, transparent 0);
+    background-size: 1px 7px;
+    background-repeat: repeat-y;
+    width: 1px;
+  }
+
+  /* Placeholder for content on its way: a flat block in the surface colour
+     that breathes once a second -- no sweeping shimmer. */
+  .skeleton {
+    background: var(--surface);
+    animation: velox-breathe 1.4s var(--ease-in-out) infinite;
   }
 }
 
 @layer utilities {
-  .font-display { font-family: 'Unbounded', sans-serif; }
-  .font-mono2 { font-family: 'JetBrains Mono', monospace; }
+  .font-mono2 {
+    font-family: 'Martian Mono', ui-monospace, monospace;
+    font-stretch: 87.5%;
+    letter-spacing: 0;
+  }
 }
 
-/* Sticky navbar and fixed footer.
-
-   These were written as `bg-[var(--bg)]/92 backdrop-blur`, which Tailwind
-   silently compiled to nothing at all, leaving both bars fully transparent --
-   the blur alone cannot stop scrolled text being read through them. Two
-   independent reasons, either of which is enough to drop the utility:
-
-     * 92 is not on Tailwind's opacity scale, which goes in steps of five, so
-       `/92` is not a recognised modifier (`/90` or `/[0.92]` would be);
-     * an opacity modifier cannot be applied to an arbitrary `var()` colour at
-       all -- Tailwind has to split the colour into channels to add an alpha to
-       it, and it cannot see inside a custom property. Even `bg-[var(--bg)]/90`
-       produces no rule.
-
-   Hence plain CSS, where the alpha is composed from --bg-rgb by hand. The
-   background is opaque enough to read over on its own; the blur is a garnish,
-   and browsers without backdrop-filter fall back to the flat colour. */
-@layer components {
-  .navbar-surface {
-    background: rgb(var(--bg-rgb) / 0.92);
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+@keyframes velox-breathe {
+  0%,
+  100% {
+    opacity: 1;
   }
-
-  .footer-surface {
-    background: rgb(var(--bg-rgb) / 0.95);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .navbar-surface,
-    .footer-surface {
-      background: var(--bg);
-    }
+  50% {
+    opacity: 0.55;
   }
 }
 
@@ -103,19 +174,131 @@ body {
    panel is rendered into <body> through a portal, where a scoped rule on the
    component's own tree would not reach it. */
 @keyframes velox-select-in {
-  from { opacity: 0; transform: scale(0.97) translateY(-2px); }
-  to   { opacity: 1; transform: scale(1) translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Scrollbar tuned to the dark surface palette. */
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 8px;
-  border: 2px solid var(--bg);
+/* Arrival animations -- in CSS, not JavaScript.
+
+   An element starts on the first keyframe (held through its delay by the
+   `backwards` fill) and ends on its own style. Nothing has to report back that
+   it finished, so nothing can leave a page stuck half-shown: the route
+   transitions used to wait on Framer Motion's presence callbacks, and a page
+   whose filters had just reflowed under `layout` animations could keep that
+   wait open for good -- a blank screen under the header until a reload.
+
+   The two knobs are registered as not inherited: a block that arrives late
+   must not hand its lateness down to everything inside it. */
+@property --delay {
+  syntax: '<time>';
+  inherits: false;
+  initial-value: 0ms;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--border2); }
+@property --rise {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 18px;
+}
+@keyframes velox-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes velox-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--rise, 18px), 0);
+  }
+}
+@keyframes velox-word {
+  from {
+    transform: translate3d(0, 105%, 0);
+  }
+}
+@keyframes velox-deal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 26px, 0) rotate(-0.6deg);
+  }
+}
+/* The poster on an event page, hung a little crooked and straightened. */
+@keyframes velox-hang {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 28px, 0) rotate(-1.2deg);
+  }
+}
+/* The 404 ticket: dropped in, a small overshoot, settled askew. Ends on the
+   element's own rotate(-4deg), so nothing jumps when the animation lets go. */
+@keyframes velox-drop {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -48px, 0) rotate(-14deg);
+  }
+  55% {
+    opacity: 1;
+    transform: translate3d(0, 6px, 0) rotate(-2deg);
+  }
+  78% {
+    transform: translate3d(0, -2px, 0) rotate(-4.6deg);
+  }
+  100% {
+    transform: rotate(-4deg);
+  }
+}
+
+@layer utilities {
+  .anim-page {
+    animation: velox-fade 340ms var(--ease-out) backwards;
+  }
+  .anim-fade {
+    animation: velox-fade 500ms var(--ease-out) var(--delay, 0ms) backwards;
+  }
+  .anim-rise {
+    animation: velox-rise 700ms var(--ease-out) var(--delay, 0ms) backwards;
+  }
+  .anim-deal {
+    animation: velox-deal 750ms var(--ease-out) var(--delay, 0ms) backwards;
+  }
+  .anim-hang {
+    animation: velox-hang 900ms var(--ease-out) backwards;
+  }
+  /* A figure replaced in place -- a counter stepping -- rises quickly. */
+  .anim-tick {
+    --rise: 8px;
+    animation: velox-rise 280ms var(--ease-out) backwards;
+  }
+  .anim-drop {
+    animation: velox-drop 900ms var(--ease-out) 60ms backwards;
+  }
+  .anim-word {
+    display: inline-block;
+    animation: velox-word 780ms var(--ease-out) var(--delay, 0ms) backwards;
+  }
+}
+
+/* Scrollbar tuned to the warm surface palette. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border-radius: 8px;
+  border: 3px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted2);
+}
 
 /* A strip that scrolls sideways without a bar across it. Firefox and the
    WebKit/Blink pseudo-element disagree on how to say this, so both are here;
@@ -126,4 +309,20 @@ body {
 }
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+/* Motion is a courtesy, not a requirement. Framer Motion already listens to
+   this through MotionConfig; this covers the CSS transitions and keyframes. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    /* Without this an element with a staggered delay would sit invisible for
+       the whole delay and then appear -- the wait without the motion. */
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

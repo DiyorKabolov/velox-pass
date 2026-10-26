@@ -1,4 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
+import { CONTAINER, PageHeader } from '../../components/ui/Page'
+import { RouteTabs } from '../../components/ui/Tabs'
 
 const TABS = [
   { to: '/admin', label: 'Сводка', end: true },
@@ -11,39 +13,33 @@ const TABS = [
   { to: '/admin/pdf-templates', label: 'Шаблоны PDF' },
 ]
 
-function tabClass({ isActive }) {
-  return [
-    'rounded-[var(--radius-sm)] px-3.5 py-1.5 text-sm transition-colors duration-150',
-    isActive
-      ? 'bg-[var(--surface2)] text-[var(--text)]'
-      : 'text-[var(--muted)] hover:text-[var(--text)]',
-  ].join(' ')
-}
-
-/** Shared shell for the admin screens: title, tab strip and content slot. */
+/**
+ * Shared shell for the admin screens: title, tab strip and content slot.
+ *
+ * The tabs are separate routes, but the route transition treats them as one
+ * screen (see RouteTransition), so the strip stays put and only what is under
+ * it changes -- with the underline travelling to the new tab.
+ */
 export default function AdminLayout({ title, subtitle, action, children }) {
+  const { pathname } = useLocation()
+
   return (
-    <div className="mx-auto max-w-6xl px-5 py-12">
-      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="font-mono2 text-[11px] uppercase tracking-[0.24em] text-[var(--muted2)]">
-            Администрирование
-          </p>
-          <h1 className="mt-2 font-display text-2xl tracking-tight">{title}</h1>
-          {subtitle && <p className="mt-2 text-sm text-[var(--muted)]">{subtitle}</p>}
-        </div>
-        {action}
-      </header>
+    <div className={`${CONTAINER} pt-10 sm:pt-14`}>
+      <PageHeader
+        kicker="Администрирование"
+        title={title}
+        size="md"
+        lead={subtitle}
+        actions={action}
+        rule={false}
+      />
 
-      <nav className="mb-8 flex flex-wrap gap-1 border-b border-[var(--border)] pb-3">
-        {TABS.map((tab) => (
-          <NavLink key={tab.to} to={tab.to} end={tab.end} className={tabClass}>
-            {tab.label}
-          </NavLink>
-        ))}
-      </nav>
+      <RouteTabs className="mt-8" layoutId="admin-tab" items={TABS} />
 
-      {children}
+      {/* Keyed by the address, so each tab's content arrives afresh. */}
+      <div key={pathname} className="anim-rise pt-8" style={{ '--rise': '10px', '--delay': '50ms' }}>
+        {children}
+      </div>
     </div>
   )
 }
@@ -52,7 +48,7 @@ export default function AdminLayout({ title, subtitle, action, children }) {
 export function TableShell({ children }) {
   return (
     <div className="overflow-x-auto rounded-[var(--radius)] border border-[var(--border)]">
-      <table className="w-full min-w-[640px] text-left text-sm">{children}</table>
+      <table className="w-full min-w-[640px] text-left text-[14px]">{children}</table>
     </div>
   )
 }
@@ -60,7 +56,7 @@ export function TableShell({ children }) {
 export function Th({ children, className = '', ...props }) {
   return (
     <th
-      className={`border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3 font-mono2 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)] ${className}`}
+      className={`t-label border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 !font-semibold ${className}`}
       {...props}
     >
       {children}
@@ -70,7 +66,7 @@ export function Th({ children, className = '', ...props }) {
 
 export function Td({ children, className = '', ...props }) {
   return (
-    <td className={`border-b border-[var(--border)] px-4 py-3 ${className}`} {...props}>
+    <td className={`border-b border-[var(--border)] px-4 py-3.5 ${className}`} {...props}>
       {children}
     </td>
   )

@@ -38,7 +38,7 @@ function Tab({ active, onClick, children }) {
       className={[
         'rounded-[var(--radius-sm)] px-3.5 py-1.5 text-sm transition-colors duration-150',
         active
-          ? 'bg-[var(--accent)] font-medium text-[var(--bg)]'
+          ? 'bg-[var(--select)] font-medium text-[var(--text)]'
           : 'text-[var(--muted)] hover:text-[var(--text)]',
       ].join(' ')}
     >
@@ -117,7 +117,7 @@ function HallsTab({ venueId }) {
               className="flex items-center justify-between gap-3 px-3 py-2.5"
             >
               <span className="flex min-w-0 items-center gap-2 text-sm">
-                <Grid3x3 size={14} className="shrink-0 text-[var(--accent)]" />
+                <Grid3x3 size={14} className="shrink-0 text-[var(--muted)]" />
                 <span className="truncate">{hall.name}</span>
                 <span className="shrink-0 font-mono2 text-xs text-[var(--muted2)]">
                   {hall.rows}×{hall.cols} · {hall.seats_count} мест
@@ -127,7 +127,8 @@ function HallsTab({ venueId }) {
                 size="sm"
                 variant="danger"
                 aria-label={`Удалить ${hall.name}`}
-                loading={remove.isPending}
+                // This hall's button only: the others stay as they are.
+                loading={remove.isPending && remove.variables === hall.id}
                 onClick={() => {
                   if (window.confirm(`Удалить зал "${hall.name}"?`)) remove.mutate(hall.id)
                 }}
@@ -274,7 +275,15 @@ function PhotoTab({ venue }) {
 
 /** Halls, staff and photo of one venue, behind three tabs. */
 function VenueModal({ venue, onClose }) {
+  // Every opening starts on the halls -- for another venue, and for the same
+  // one opened again ("+ Зал" is there to add a hall). The tab picked last
+  // time used to carry over.
   const [tab, setTab] = useState('halls')
+  const [openFor, setOpenFor] = useState(venue?.id ?? null)
+  if ((venue?.id ?? null) !== openFor) {
+    setOpenFor(venue?.id ?? null)
+    if (venue) setTab('halls')
+  }
 
   return (
     <Modal
@@ -360,7 +369,7 @@ export default function Venues() {
       }
     >
       {isLoading ? (
-        <div className="h-40 animate-pulse rounded-[var(--radius)] bg-[var(--surface)]" />
+        <div className="h-40 skeleton rounded-[var(--radius)]" />
       ) : (
         <TableShell>
           <thead>
@@ -407,6 +416,7 @@ export default function Venues() {
                       size="sm"
                       variant="danger"
                       aria-label={`Удалить ${venue.name}`}
+                      loading={removeVenue.isPending && removeVenue.variables === venue.id}
                       onClick={() => {
                         if (window.confirm(`Удалить "${venue.name}" со всеми залами?`)) {
                           removeVenue.mutate(venue.id)
@@ -473,7 +483,7 @@ export default function Venues() {
               required
             />
             <label className="block">
-              <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+              <span className="t-label mb-2 block">
                 Тип
               </span>
               <Select
@@ -494,7 +504,7 @@ export default function Venues() {
               placeholder="ул. Главная, 1"
             />
             <label className="block" htmlFor="venue-description">
-              <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+              <span className="t-label mb-2 block">
                 Описание
               </span>
               <textarea
@@ -505,7 +515,7 @@ export default function Venues() {
                   setVenueForm({ ...venueForm, description: e.target.value })
                 }
                 placeholder="Что стоит знать посетителю — залы, парковка, как добраться."
-                className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-[var(--text)] outline-none transition-all duration-150 placeholder:text-[var(--muted2)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25"
+                className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-[var(--text)] outline-none transition-all duration-150 placeholder:text-[var(--muted2)] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-dim)]"
               />
               <span className="mt-1.5 block text-xs text-[var(--muted2)]">
                 Показывается на публичной странице площадки.

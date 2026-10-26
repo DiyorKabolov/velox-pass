@@ -116,3 +116,8 @@ export function formatPrice(value) {
   if (!amount) return '—'
   return `${amount.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} сомони`
 }
+
+/** "от 300 сомони" for the cheapest seat of a showing; "бесплатно" when it costs nothing. */
+export function formatFrom(value) {
+  return Number(value) ? `от ${formatPrice(value)}` : 'бесплатно'
+}

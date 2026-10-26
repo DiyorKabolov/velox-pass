@@ -156,5 +156,17 @@ export function ruleToPayload(rule) {
     // The times above are wall clock. Without the offset the server would read
     // them as UTC and file every showing at the wrong hour.
     tz_offset_minutes: -new Date().getTimezoneOffset(),
+    // The zone by name as well: today's offset is not the offset of every date
+    // in the range when it crosses a daylight-saving change. The server uses
+    // the name when it knows it and the offset otherwise.
+    tz_name: browserTimeZone(),
+  }
+}
+
+function browserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null
+  } catch {
+    return null
   }
 }

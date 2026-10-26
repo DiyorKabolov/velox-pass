@@ -36,6 +36,33 @@ export function withAlpha(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+/** WCAG relative luminance of #rrggbb, or null when it is not one. */
+function luminanceOf(hex) {
+  const clean = String(hex || '').replace('#', '')
+  if (clean.length !== 6) return null
+  const channel = (value) => {
+    const c = parseInt(value, 16) / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+  return (
+    0.2126 * channel(clean.slice(0, 2)) +
+    0.7152 * channel(clean.slice(2, 4)) +
+    0.0722 * channel(clean.slice(4, 6))
+  )
+}
+
+/**
+ * Ink for type set large on a field of colour -- a poster. Picks whichever of
+ * near-black and paper-white has the higher contrast, which flips at a
+ * luminance of about 0.18: an orange or a lilac carries black type far better
+ * than white, though both look "bright".
+ */
+export function inkFor(hex, dark = '#14110f', light = '#fbf8f1') {
+  const luminance = luminanceOf(hex)
+  if (luminance === null) return light
+  return luminance > 0.179 ? dark : light
+}
+
 /**
  * Pick a legible foreground for a background colour using the WCAG relative
  * luminance, so a pale accent still gets dark text on the ticket stub.

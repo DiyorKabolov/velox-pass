@@ -21,7 +21,19 @@ export default defineConfig({
       '/uploads': {
         target: 'http://localhost:8000',
         changeOrigin: true
-      }
+      },
+      // The live seat map's socket. Without it the picker reads "нет связи"
+      // in development and retries every few seconds for as long as it is
+      // open. (Vite's own hot-reload socket lives at /, not under /ws/.)
+      '/ws/': {
+        target: 'ws://localhost:8000',
+        ws: true,
+        changeOrigin: true
+      },
+      // The API reference the footer links to, and the schema it reads.
+      '/docs': 'http://localhost:8000',
+      '/redoc': 'http://localhost:8000',
+      '/openapi.json': 'http://localhost:8000'
     }
   }
 })

@@ -9,15 +9,11 @@ import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
 import { ROLE_LABELS as VENUE_ROLE_LABELS, ROLE_STYLE } from '../../components/admin/VenueStaff'
 import useAuth from '../../hooks/useAuth'
+import { ACCOUNT_ROLE_LABELS } from '../../utils/roles'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
 const ROLES = ['user', 'scanner', 'venue_admin', 'superadmin']
-const ROLE_LABELS = {
-  user: 'пользователь',
-  scanner: 'сканер',
-  venue_admin: 'админ площадки',
-  superadmin: 'суперадмин',
-}
+const ROLE_LABELS = ACCOUNT_ROLE_LABELS
 
 // Colour per role so scanners stand out in a long table.
 const ROLE_COLOR = {
@@ -58,7 +54,7 @@ function VenueCell({ user }) {
           // without opening the venue.
           style={ROLE_STYLE[venue.role]}
           title={`${venue.venue_name}: ${VENUE_ROLE_LABELS[venue.role] ?? venue.role}`}
-          className="whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px]"
+          className="whitespace-nowrap rounded-[3px] border px-2 py-0.5 text-[11px]"
         >
           {venue.venue_name}
         </span>
@@ -106,7 +102,7 @@ export default function Users() {
   return (
     <AdminLayout title="Пользователи" subtitle="Роли и удаление учётных записей.">
       {isLoading ? (
-        <div className="h-48 animate-pulse rounded-[var(--radius)] bg-[var(--surface)]" />
+        <div className="h-48 skeleton rounded-[var(--radius)]" />
       ) : (
         <TableShell>
           <thead>

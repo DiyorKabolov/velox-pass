@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { WEEKDAYS_SHORT, dayKey, formatTime } from '../../utils/dates'
 import { pluralize } from '../../utils/plural'
-import { formatPrice } from '../../utils/ticketGroups'
+import { formatFrom } from '../../utils/ticketGroups'
 
 const DAY = 24 * 60 * 60 * 1000
+
+const MONTHS_NOMINATIVE = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+]
 
 /** "2026-09-15" back into a local date. */
 const fromKey = (key) => {
@@ -18,30 +24,38 @@ const mondayOf = (date) => {
   return start
 }
 
-/** Free seats are what a buyer acts on, so they carry the warning. */
+/** "Сентябрь 2026", or "Сентябрь — Октябрь 2026" for a week across the turn. */
+function monthsOf(week) {
+  const first = week[0]
+  const last = week[week.length - 1]
+  if (first.getMonth() === last.getMonth()) {
+    return `${MONTHS_NOMINATIVE[first.getMonth()]} ${first.getFullYear()}`
+  }
+  const tail = `${MONTHS_NOMINATIVE[last.getMonth()]} ${last.getFullYear()}`
+  return first.getFullYear() === last.getFullYear()
+    ? `${MONTHS_NOMINATIVE[first.getMonth()]} — ${tail}`
+    : `${MONTHS_NOMINATIVE[first.getMonth()]} ${first.getFullYear()} — ${tail}`
+}
+
+/** Free seats are what a buyer acts on, so they only take a colour once they run short. */
 function seatsColor(free) {
   if (free <= 0) return 'var(--err)'
   if (free < 20) return 'var(--warn)'
-  return 'var(--ok)'
+  return 'var(--text)'
 }
 
-function Dot() {
-  return (
-    <span aria-hidden className="text-[var(--muted2)]">
-      ·
-    </span>
-  )
-}
+/** The rows of a day rise one after another. */
+const row = (index) => ({ '--rise': '10px', '--delay': `${Math.min(index, 8) * 50}ms` })
 
 /**
- * The timetable a week at a time: seven days with a dot where something is on,
- * and the showings of the chosen day as rows beneath -- each with what it costs,
- * how much of it is left, and the button that buys it.
+ * The timetable a week at a time: seven days with a mark where something is
+ * on, and the showings of the chosen day as rows beneath -- each with what it
+ * costs, how much of it is left, and the button that buys it.
  *
  * `renderAction` decides what that button is: the page knows whether the reader
  * is signed in and whether the event is over, and this does not.
  */
-export default function WeekSchedule({ sessions, selectedDay, onSelectDay, accent, renderAction }) {
+export default function WeekSchedule({ sessions, selectedDay, onSelectDay, renderAction }) {
   const byDay = useMemo(() => {
     const groups = new Map()
     for (const session of sessions) {
@@ -80,99 +94,116 @@ export default function WeekSchedule({ sessions, selectedDay, onSelectDay, accen
   }
 
   const daySessions = selectedDay ? byDay.get(selectedDay) ?? [] : []
+  const arrow =
+    'grid h-9 w-9 place-items-center rounded-[var(--radius-sm)] border border-[var(--border2)] text-[var(--muted)] transition-[color,background-color,transform] duration-200 hover:bg-[var(--surface2)] hover:text-[var(--text)] active:scale-[0.94]'
 
   return (
     <div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => shift(-1)}
-          aria-label="Предыдущая неделя"
-          className="shrink-0 rounded-full border border-[var(--border)] p-2 text-[var(--muted)] transition-colors hover:text-[var(--text)]"
-        >
-          <ChevronLeft size={16} />
-        </button>
-
-        <div className="grid flex-1 grid-cols-7 gap-1.5">
-          {week.map((date) => {
-            const key = dayKey(date)
-            const has = byDay.has(key)
-            const active = key === selectedDay
-            return (
-              <button
-                key={key}
-                type="button"
-                disabled={!has}
-                aria-pressed={active}
-                aria-label={`${date.getDate()} число${has ? ', есть сеансы' : ''}`}
-                onClick={() => onSelectDay(key)}
-                className="flex flex-col items-center rounded-[var(--radius-sm)] border py-2 text-xs transition-colors disabled:cursor-default"
-                style={{
-                  borderColor: active ? accent : 'var(--border)',
-                  background: active ? accent : 'transparent',
-                  color: active ? 'var(--bg)' : has ? 'var(--text)' : 'var(--muted2)',
-                }}
-              >
-                <span className="opacity-70">{WEEKDAYS_SHORT[date.getDay()]}</span>
-                <span className="mt-0.5 text-sm font-semibold">{date.getDate()}</span>
-                <span
-                  className="mt-1 h-1 w-1 rounded-full"
-                  style={{ background: has && !active ? accent : 'transparent' }}
-                />
-              </button>
-            )
-          })}
+      <div className="flex items-center justify-between gap-4">
+        <p className="font-display text-[19px] font-bold uppercase leading-none text-[var(--text)]">
+          {monthsOf(week)}
+        </p>
+        <div className="flex gap-1.5">
+          <button type="button" onClick={() => shift(-1)} aria-label="Предыдущая неделя" className={arrow}>
+            <ChevronLeft size={16} strokeWidth={1.75} />
+          </button>
+          <button type="button" onClick={() => shift(1)} aria-label="Следующая неделя" className={arrow}>
+            <ChevronRight size={16} strokeWidth={1.75} />
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={() => shift(1)}
-          aria-label="Следующая неделя"
-          className="shrink-0 rounded-full border border-[var(--border)] p-2 text-[var(--muted)] transition-colors hover:text-[var(--text)]"
-        >
-          <ChevronRight size={16} />
-        </button>
       </div>
 
-      <div className="mt-5 space-y-2.5">
+      <div className="mt-4 grid grid-cols-7 border-y border-[var(--border)]">
+        {week.map((date, index) => {
+          const key = dayKey(date)
+          const has = byDay.has(key)
+          const active = key === selectedDay
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={!has}
+              aria-pressed={active}
+              aria-label={`${date.getDate()} число${has ? ', есть сеансы' : ''}`}
+              onClick={() => onSelectDay(key)}
+              className={[
+                'relative flex flex-col items-center gap-1.5 py-3.5 transition-colors duration-200 disabled:cursor-default',
+                index > 0 ? 'border-l border-[var(--border)]' : '',
+                active
+                  ? 'text-[var(--bg)]'
+                  : has
+                    ? 'text-[var(--text)] hover:bg-[var(--surface)]'
+                    : 'text-[var(--muted2)]',
+              ].join(' ')}
+            >
+              {active && (
+                <motion.span
+                  layoutId="week-day"
+                  transition={{ type: 'spring', stiffness: 480, damping: 40 }}
+                  className="absolute inset-0 bg-[var(--text)]"
+                />
+              )}
+              <span className="relative text-[11px] font-semibold uppercase tracking-[0.06em] opacity-70">
+                {WEEKDAYS_SHORT[date.getDay()]}
+              </span>
+              <span className="t-poster t-num relative text-[30px] leading-none sm:text-[34px]">
+                {date.getDate()}
+              </span>
+              <span
+                className="relative h-1 w-1 rounded-full"
+                style={{ background: has && !active ? 'var(--accent)' : 'transparent' }}
+              />
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Keyed by the day, so a newly picked day's rows arrive afresh. */}
+      <ul key={selectedDay ?? 'none'}>
         {!selectedDay || !daySessions.length ? (
-          <p className="py-4 text-center text-sm text-[var(--muted)]">В этот день сеансов нет.</p>
+          <li className="anim-rise py-8 text-[15px] text-[var(--muted)]" style={row(0)}>
+            В этот день сеансов нет.
+          </li>
         ) : (
-          daySessions.map((session) => {
+          daySessions.map((session, index) => {
             const soldOut = session.seats_free <= 0
             return (
-              <div
+              <li
                 key={session.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5"
-                style={{ opacity: soldOut ? 0.6 : 1 }}
+                className="anim-rise group/session grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-5 gap-y-3 border-b border-[var(--border)] py-5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-8"
+                style={{ ...row(index), opacity: soldOut ? 0.5 : 1 }}
               >
-                <span className="font-mono2 text-lg font-bold" style={{ color: accent }}>
+                <span className="t-poster t-num text-[40px] leading-none text-[var(--text)]">
                   {formatTime(session.datetime)}
                 </span>
-                {session.hall_name && (
-                  <>
-                    <Dot />
-                    <span className="text-sm text-[var(--muted)]">{session.hall_name}</span>
-                  </>
-                )}
-                <Dot />
-                <span className="text-sm" style={{ color: seatsColor(session.seats_free) }}>
-                  {soldOut ? 'Мест нет' : pluralize(session.seats_free, 'место', 'места', 'мест')}
-                </span>
-                {session.min_price != null && (
-                  <>
-                    <Dot />
-                    <span className="text-sm text-[var(--muted)]">
-                      от {formatPrice(session.min_price)}
+                <div className="min-w-0">
+                  {session.hall_name && (
+                    <p className="truncate text-[15px] text-[var(--text)]">{session.hall_name}</p>
+                  )}
+                  <p className="mt-1 text-[13px] text-[var(--muted)]">
+                    <span style={{ color: seatsColor(session.seats_free) }}>
+                      {soldOut
+                        ? 'Мест нет'
+                        : pluralize(session.seats_free, 'место', 'места', 'мест')}
                     </span>
-                  </>
-                )}
-                <div className="ml-auto">{renderAction(session, soldOut)}</div>
-              </div>
+                    {session.min_price != null && (
+                      <>
+                        <span aria-hidden className="mx-2 text-[var(--muted2)]">
+                          /
+                        </span>
+                        {formatFrom(session.min_price)}
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="col-span-2 sm:col-span-1 sm:justify-self-end">
+                  {renderAction(session, soldOut)}
+                </div>
+              </li>
             )
           })
         )}
-      </div>
+      </ul>
     </div>
   )
 }

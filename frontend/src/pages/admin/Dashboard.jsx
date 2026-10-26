@@ -3,18 +3,31 @@ import { CalendarDays, CheckCircle2, Ticket, Users, Wallet } from 'lucide-react'
 import { getAdminEvents, getStats } from '../../api/admin'
 import { formatShortDate } from '../../utils/dates'
 import { capacityLabel, sessionsLabel } from '../../utils/capacity'
+import { SectionHead } from '../../components/ui/Page'
+import { AnimatedNumber } from '../../components/motion/Motion'
 import AdminLayout, { TableShell, Td, Th } from './AdminLayout'
 
-function StatCard({ icon: Icon, label, value }) {
+// Money keeps its kopecks (дирамы) when it has them, and drops ",00" when not.
+const money = (n) => n.toLocaleString('ru-RU', { maximumFractionDigits: 2 })
+
+/**
+ * A figure under a rule, the way a report prints its key numbers. A unit, if
+ * any, is set small after the figure, so the figure itself stays as large as
+ * its neighbours.
+ */
+function StatCard({ icon: Icon, label, value, unit, format }) {
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-5">
-      <div className="flex items-center gap-2 text-[var(--muted)]">
-        <Icon size={15} className="text-[var(--accent)]" />
-        <span className="font-mono2 text-[10px] uppercase tracking-[0.14em]">
-          {label}
-        </span>
-      </div>
-      <p className="mt-3 font-display text-2xl tracking-tight">{value}</p>
+    <div className="border-t border-[var(--border)] pt-4">
+      <p className="t-label flex items-center gap-2">
+        <Icon size={14} strokeWidth={1.75} className="text-[var(--muted2)]" />
+        {label}
+      </p>
+      <p className="t-poster mt-3 text-[clamp(40px,4.6vw,60px)] text-[var(--text)]">
+        <AnimatedNumber value={value} format={format} />
+        {unit && (
+          <span className="ml-[0.18em] text-[0.36em] text-[var(--muted)]">{unit}</span>
+        )}
+      </p>
     </div>
   )
 }
@@ -37,24 +50,30 @@ export default function Dashboard() {
     {
       icon: Wallet,
       label: 'Выручка',
-      value: (stats?.revenue ?? 0).toFixed(2),
+      // A number, not a string from toFixed: a string was printed as it came,
+      // without a currency, and never counted up like the rest.
+      value: Number(stats?.revenue ?? 0),
+      format: money,
+      unit: 'сомони',
     },
   ]
 
   return (
     <AdminLayout title="Сводка" subtitle="Ключевые показатели системы.">
-      <div className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mb-14 grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
         {cards.map((card) => (
           <StatCard
             key={card.label}
             icon={card.icon}
             label={card.label}
             value={isLoading ? '—' : card.value}
+            format={card.format}
+            unit={isLoading ? null : card.unit}
           />
         ))}
       </div>
 
-      <h2 className="mb-4 font-display text-base">Последние мероприятия</h2>
+      <SectionHead title="Последние мероприятия" className="mb-6" />
       <TableShell>
         <thead>
           <tr>

@@ -1,4 +1,5 @@
-import { eventEndsAt, isEventOver } from './eventState'
+import { eventEndsAt, isEventOver, isEventSoldOut, seatCounts } from './eventState'
+
 /**
  * Filtering and sorting for the listing page. Kept apart from the page so the
  * rules are testable on their own and the component stays about layout.
@@ -43,28 +44,22 @@ const time = (value) => {
 const startOfToday = (now) => {
   const day = new Date(now)
   day.setHours(0, 0, 0, 0)
-  return day.getTime()
+  return day
 }
-
-const DAY = 24 * 60 * 60 * 1000
 
 /**
  * How full an event is, 0..1, or null when it cannot be known.
  *
- * Events that seat by hall plan carry capacity 0 -- their real capacity lives on
- * the hall, not the event -- so their fill is unknown rather than empty, and
- * they must not be ranked as if nothing had sold.
+ * Read from the same seat counts the card shows. Events that seat by hall
+ * plan carry capacity 0 -- their seats live on the halls of their showings --
+ * and ranking by capacity alone sent every one of them to the bottom as
+ * "unknown". An event with no seats on record at all (no capacity, no live
+ * showing) still is unknown, not empty, and sinks.
  */
 export function fillRatio(event) {
-  const capacity = event?.capacity ?? 0
-  if (!capacity) return null
-  return Math.min((event.tickets_sold ?? 0) / capacity, 1)
-}
-
-/** Sold out only makes sense where a capacity is actually recorded. */
-export function isSoldOut(event) {
-  const capacity = event?.capacity ?? 0
-  return capacity > 0 && (event.tickets_sold ?? 0) >= capacity
+  const { total, available } = seatCounts(event)
+  if (!total) return null
+  return Math.min(Math.max((total - available) / total, 0), 1)
 }
 
 /** An event matches when it carries at least one of the chosen tags. */
@@ -84,9 +79,22 @@ export function matchesSearch(event, query) {
 }
 
 /**
- * Rolling windows measured from the start of today, so an event earlier the
- * same day still counts as "today" instead of falling out of every bucket.
+ * Calendar windows, as the words say: "this week" runs to the end of Sunday
+ * and "this month" to the end of the month -- not seven and thirty days from
+ * now, which on a Sunday made "this week" reach to next Saturday. Each starts
+ * at the beginning of today, so an event earlier the same day still counts as
+ * "today" instead of falling out of every bucket.
  */
+export function windowEnd(filter, now = Date.now()) {
+  const end = startOfToday(now)
+  if (filter === 'today') end.setDate(end.getDate() + 1)
+  // To the coming Monday, 00:00 -- the week starts on Monday here.
+  else if (filter === 'week') end.setDate(end.getDate() + 7 - ((end.getDay() + 6) % 7))
+  else if (filter === 'month') end.setMonth(end.getMonth() + 1, 1)
+  else return null
+  return end.getTime()
+}
+
 export function matchesDate(event, filter, now = Date.now()) {
   if (filter === 'all') return true
   const at = time(event.date)
@@ -95,16 +103,14 @@ export function matchesDate(event, filter, now = Date.now()) {
   // window it overlaps, not only to the one its first night falls in.
   const until = time(eventEndsAt(event)) ?? at
 
-  const from = startOfToday(now)
-  const spans = { today: DAY, week: 7 * DAY, month: 30 * DAY }
-  const span = spans[filter]
-  if (!span) return true
-  return at < from + span && until >= from
+  const end = windowEnd(filter, now)
+  if (end === null) return true
+  return at < end && until >= startOfToday(now).getTime()
 }
 
 /**
- * Deliberately the same rule the card's own badge uses, so the filter always
- * agrees with the label the reader can see on the card. Note this is NOT
+ * The very rule behind the stamp on the card (isEventSoldOut), so the filter
+ * always agrees with what the reader can see. Note this is NOT
  * `seats_left > 0`: seats_left is 0 for every hall-seated event, which would
  * hide exactly the events that have the most seats free.
  */
@@ -112,11 +118,11 @@ export function matchesStatus(event, filter, now = Date.now()) {
   if (filter === 'all') return true
   const past = isEventOver(event, now)
   if (filter === 'finished') return past
-  if (filter === 'available') return !past && !isSoldOut(event)
+  if (filter === 'available') return !past && !isEventSoldOut(event)
   return true
 }
 
-export function compareEvents(a, b, sort) {
+export function compareEvents(a, b, sort, now = Date.now()) {
   if (sort === 'title') {
     return String(a.title ?? '').localeCompare(String(b.title ?? ''), 'ru')
   }
@@ -137,7 +143,15 @@ export function compareEvents(a, b, sort) {
   if (left === null && right === null) return 0
   if (left === null) return 1
   if (right === null) return -1
-  return sort === 'date-desc' ? right - left : left - right
+  if (sort === 'date-desc') return right - left
+
+  // "Nearest first": what is still ahead, soonest first, and only then what
+  // has passed -- most recent first. Plain ascending order put an event from
+  // last year above everything still on sale.
+  const aOver = isEventOver(a, now)
+  const bOver = isEventOver(b, now)
+  if (aOver !== bOver) return aOver ? 1 : -1
+  return aOver ? right - left : left - right
 }
 
 export function applyFilters(events, filters, now = Date.now()) {
@@ -147,7 +161,7 @@ export function applyFilters(events, filters, now = Date.now()) {
     .filter((event) => matchesSearch(event, filters.query))
     .filter((event) => matchesDate(event, filters.date, now))
     .filter((event) => matchesStatus(event, filters.status, now))
-    .sort((a, b) => compareEvents(a, b, filters.sort))
+    .sort((a, b) => compareEvents(a, b, filters.sort, now))
 }
 
 /** True when anything is set away from its default, i.e. a reset would do something. */

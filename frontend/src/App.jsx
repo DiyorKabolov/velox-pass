@@ -1,13 +1,14 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Navbar from './components/layout/Navbar'
 import Footer from './components/layout/Footer'
+import RouteTransition from './components/layout/RouteTransition'
 import useAuth, { useSyncUser } from './hooks/useAuth'
+import { hereOf, returnPath } from './utils/returnPath'
 import Cabinet from './pages/Cabinet'
 import Confirm from './pages/Confirm'
 import FriendInvite from './pages/FriendInvite'
 import GiftRespond from './pages/GiftRespond'
 import Profile from './pages/Profile'
-import Friends from './pages/Friends'
 import EventDetail from './pages/EventDetail'
 import Home from './pages/Home'
 import Login from './pages/Login'
@@ -25,13 +26,25 @@ import AdminTickets from './pages/admin/Tickets'
 import AdminPdfTemplates from './pages/admin/PdfTemplates'
 import AdminUsers from './pages/admin/Users'
 
+/**
+ * The friends page moved into the cabinet. The address stays, because e-mailed
+ * invitations and old bookmarks point at it -- with whatever it was asked
+ * (?accepted, ?declined) carried across to the tab that answers for it.
+ */
+function FriendsRedirect() {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  params.set('tab', 'friends')
+  return <Navigate to={`/cabinet?${params}`} replace />
+}
+
 /** Requires a signed-in user; remembers where they were headed. */
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth()
   const location = useLocation()
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+    return <Navigate to="/login" state={{ from: hereOf(location) }} replace />
   }
   return children
 }
@@ -42,7 +55,7 @@ function AdminRoute({ children }) {
   const location = useLocation()
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+    return <Navigate to="/login" state={{ from: hereOf(location) }} replace />
   }
   if (!isSuperadmin) {
     return <Navigate to="/" replace />
@@ -56,7 +69,7 @@ function ScannerRoute({ children }) {
   const location = useLocation()
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+    return <Navigate to="/login" state={{ from: hereOf(location) }} replace />
   }
   if (!isScanner) {
     return <Navigate to="/" replace />
@@ -70,7 +83,7 @@ function VenueAdminRoute({ children }) {
   const location = useLocation()
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+    return <Navigate to="/login" state={{ from: hereOf(location) }} replace />
   }
   if (user?.role !== 'venue_admin' && user?.role !== 'superadmin') {
     return <Navigate to="/" replace />
@@ -81,7 +94,8 @@ function VenueAdminRoute({ children }) {
 /** Keeps signed-in users away from the login / register screens. */
 function GuestRoute({ children }) {
   const { isAuthenticated } = useAuth()
-  return isAuthenticated ? <Navigate to="/" replace /> : children
+  const location = useLocation()
+  return isAuthenticated ? <Navigate to={returnPath(location)} replace /> : children
 }
 
 export default function App() {
@@ -92,155 +106,152 @@ export default function App() {
     <div className="flex min-h-dvh flex-col">
       <Navbar />
 
-      <main className="flex-1 pb-16">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/event/:id" element={<EventDetail />} />
-          <Route path="/venues" element={<Venues />} />
-          <Route path="/venues/:id" element={<VenuePage />} />
+      <main className="flex-1">
+        <RouteTransition>
+          {(location) => (
+            <Routes location={location}>
+              <Route path="/" element={<Home />} />
+              <Route path="/event/:id" element={<EventDetail />} />
+              <Route path="/venues" element={<Venues />} />
+              <Route path="/venues/:id" element={<VenuePage />} />
 
-          <Route
-            path="/login"
-            element={
-              <GuestRoute>
-                <Login />
-              </GuestRoute>
-            }
-          />
-          <Route
-            path="/register"
-            element={
-              <GuestRoute>
-                <Register />
-              </GuestRoute>
-            }
-          />
-          <Route path="/confirm" element={<Confirm />} />
+              <Route
+                path="/login"
+                element={
+                  <GuestRoute>
+                    <Login />
+                  </GuestRoute>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <GuestRoute>
+                    <Register />
+                  </GuestRoute>
+                }
+              />
+              <Route path="/confirm" element={<Confirm />} />
 
-          <Route
-            path="/cabinet"
-            element={
-              <ProtectedRoute>
-                <Cabinet />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/friends"
-            element={
-              <ProtectedRoute>
-                <Friends />
-              </ProtectedRoute>
-            }
-          />
-          {/* Public: the links in an invitation e-mail land here, and the
-              person answering may not be signed in. */}
-          <Route path="/friends/respond" element={<FriendInvite />} />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          {/* Public, for the same reason as the friend invitation page. */}
-          <Route path="/gifts/respond" element={<GiftRespond />} />
+              <Route
+                path="/cabinet"
+                element={
+                  <ProtectedRoute>
+                    <Cabinet />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/friends" element={<FriendsRedirect />} />
+              {/* Public: the links in an invitation e-mail land here, and the
+                  person answering may not be signed in. */}
+              <Route path="/friends/respond" element={<FriendInvite />} />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              {/* Public, for the same reason as the friend invitation page. */}
+              <Route path="/gifts/respond" element={<GiftRespond />} />
 
-          <Route
-            path="/scanner"
-            element={
-              <ScannerRoute>
-                <Scanner />
-              </ScannerRoute>
-            }
-          />
+              <Route
+                path="/scanner"
+                element={
+                  <ScannerRoute>
+                    <Scanner />
+                  </ScannerRoute>
+                }
+              />
 
-          <Route
-            path="/venue-admin"
-            element={
-              <VenueAdminRoute>
-                <VenueAdminPanel />
-              </VenueAdminRoute>
-            }
-          />
-          {/* The same wizard as the superadmin's. What it may create -- which
-              venues, which halls -- is narrowed by the backend, not by a
-              second copy of the page. */}
-          <Route
-            path="/venue-admin/events/new"
-            element={
-              <VenueAdminRoute>
-                <EventWizard />
-              </VenueAdminRoute>
-            }
-          />
+              <Route
+                path="/venue-admin"
+                element={
+                  <VenueAdminRoute>
+                    <VenueAdminPanel />
+                  </VenueAdminRoute>
+                }
+              />
+              {/* The same wizard as the superadmin's. What it may create -- which
+                  venues, which halls -- is narrowed by the backend, not by a
+                  second copy of the page. */}
+              <Route
+                path="/venue-admin/events/new"
+                element={
+                  <VenueAdminRoute>
+                    <EventWizard />
+                  </VenueAdminRoute>
+                }
+              />
 
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <Dashboard />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/events"
-            element={
-              <AdminRoute>
-                <AdminEvents />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/events/new"
-            element={
-              <AdminRoute>
-                <EventWizard />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/venues"
-            element={
-              <AdminRoute>
-                <AdminVenues />
-              </AdminRoute>
-            }
-          />
-          {/* The sessions tab is gone; its rows are the "по датам" view of the
-              events page. Kept as a redirect so a bookmark still lands on them. */}
-          <Route
-            path="/admin/sessions"
-            element={<Navigate to="/admin/events?view=dates" replace />}
-          />
-          <Route
-            path="/admin/users"
-            element={
-              <AdminRoute>
-                <AdminUsers />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/tickets"
-            element={
-              <AdminRoute>
-                <AdminTickets />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/pdf-templates"
-            element={
-              <AdminRoute>
-                <AdminPdfTemplates />
-              </AdminRoute>
-            }
-          />
+              <Route
+                path="/admin"
+                element={
+                  <AdminRoute>
+                    <Dashboard />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/events"
+                element={
+                  <AdminRoute>
+                    <AdminEvents />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/events/new"
+                element={
+                  <AdminRoute>
+                    <EventWizard />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/venues"
+                element={
+                  <AdminRoute>
+                    <AdminVenues />
+                  </AdminRoute>
+                }
+              />
+              {/* The sessions tab is gone; its rows are the "по датам" view of the
+                  events page. Kept as a redirect so a bookmark still lands on them. */}
+              <Route
+                path="/admin/sessions"
+                element={<Navigate to="/admin/events?view=dates" replace />}
+              />
+              <Route
+                path="/admin/users"
+                element={
+                  <AdminRoute>
+                    <AdminUsers />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/tickets"
+                element={
+                  <AdminRoute>
+                    <AdminTickets />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/pdf-templates"
+                element={
+                  <AdminRoute>
+                    <AdminPdfTemplates />
+                  </AdminRoute>
+                }
+              />
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          )}
+        </RouteTransition>
       </main>
 
       <Footer />

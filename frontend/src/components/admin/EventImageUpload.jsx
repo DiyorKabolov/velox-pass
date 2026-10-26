@@ -109,7 +109,7 @@ export default function EventImageUpload({
             'flex h-40 w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-sm)]',
             'border border-dashed text-sm transition-colors duration-150',
             dragging
-              ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--text)]'
+              ? 'border-[var(--text)] bg-[var(--surface2)] text-[var(--text)]'
               : 'border-[var(--border)] text-[var(--muted)] hover:border-[var(--border2)]',
           ].join(' ')}
         >

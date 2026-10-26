@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowRight, Wifi, WifiOff, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowRight, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSessionSeats } from '../../hooks/useSessionSeats'
 import { useBuyTicket } from '../../hooks/useTickets'
 import { formatSessionStamp } from '../../utils/dates'
 import { pluralize } from '../../utils/plural'
 import { formatPrice } from '../../utils/ticketGroups'
+import { EASE_OUT } from '../motion/Motion'
 import Button from '../ui/Button'
 import SeatMap from './SeatMap'
 
@@ -59,8 +61,6 @@ export default function SeatPickerOverlay({ open, session, eventId, eventTitle, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byId])
 
-  if (!open || !session) return null
-
   const total = selected.reduce((sum, id) => sum + (byId.get(id)?.price ?? 0), 0)
   const toggle = (seat) =>
     setSelected((current) =>
@@ -79,82 +79,112 @@ export default function SeatPickerOverlay({ open, session, eventId, eventTitle, 
     )
 
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Выбор мест"
-      className="fixed inset-0 z-[70] flex flex-col bg-[#0d0e10]/95 backdrop-blur-sm"
-    >
-      <header className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-5 py-4 sm:px-8">
-        <div className="min-w-0">
-          <p className="truncate font-display text-base tracking-tight">{eventTitle}</p>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            {[formatSessionStamp(session.datetime), session.hall_name].filter(Boolean).join(' · ')}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="hidden items-center gap-1.5 text-xs text-[var(--muted2)] sm:flex">
-            {isConnected ? (
-              <>
-                <Wifi size={13} className="text-[var(--ok)]" /> обновляется вживую
-              </>
-            ) : (
-              <>
-                <WifiOff size={13} /> нет связи
-              </>
-            )}
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Закрыть"
-            className="rounded-full border border-[var(--border)] p-2 text-[var(--muted)] transition-colors hover:text-[var(--text)]"
+    <AnimatePresence>
+      {open && session && (
+        <motion.div
+          key="seat-picker"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Выбор мест"
+          className="fixed inset-0 z-[70] flex flex-col bg-[var(--bg)]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, transition: { duration: 0.25 } }}
+          exit={{ opacity: 0, transition: { duration: 0.2, delay: 0.05 } }}
+        >
+          <motion.div
+            className="flex min-h-0 flex-1 flex-col"
+            initial={{ y: 40 }}
+            animate={{ y: 0, transition: { duration: 0.6, ease: EASE_OUT } }}
+            exit={{ y: 20, transition: { duration: 0.2 } }}
           >
-            <X size={18} />
-          </button>
-        </div>
-      </header>
+            <header className="border-b border-[var(--border)]">
+              <div className="mx-auto flex max-w-5xl items-start justify-between gap-6 px-5 py-5 sm:px-8">
+                <div className="min-w-0">
+                  <p className="t-label">Выбор мест</p>
+                  <p className="mt-2 truncate font-display text-[26px] font-bold uppercase leading-none text-[var(--text)] sm:text-[30px]">
+                    {eventTitle}
+                  </p>
+                  <p className="t-num mt-2 text-[14px] text-[var(--muted)]">
+                    {[formatSessionStamp(session.datetime), session.hall_name]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-4">
+                  <span className="hidden items-center gap-2 text-[12px] text-[var(--muted)] sm:flex">
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: isConnected ? 'var(--ok)' : 'var(--muted2)' }}
+                    />
+                    {isConnected ? 'обновляется вживую' : 'нет связи'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Закрыть"
+                    className="grid h-10 w-10 place-items-center rounded-[var(--radius-sm)] border border-[var(--border2)] text-[var(--muted)] transition-[color,background-color,transform] duration-200 hover:bg-[var(--surface2)] hover:text-[var(--text)] active:scale-[0.94]"
+                  >
+                    <X size={18} strokeWidth={1.75} />
+                  </button>
+                </div>
+              </div>
+            </header>
 
-      <div className="flex-1 overflow-auto px-5 py-8 sm:px-8">
-        <div className="mx-auto max-w-5xl">
-          {isCancelled && (
-            <p className="mb-6 rounded-[var(--radius-sm)] border border-[var(--err)] bg-[var(--err-bg)] px-4 py-3 text-sm text-[var(--err)]">
-              Сеанс отменён.
-            </p>
-          )}
-          {error && <p className="mb-6 text-sm text-[var(--err)]">{error}</p>}
-          <p className="mb-6 text-center text-sm text-[var(--muted)]">
-            Выбрано: {pluralize(selected.length, 'место', 'места', 'мест')}
-          </p>
-          {isLoading ? (
-            <div className="mx-auto h-72 max-w-2xl animate-pulse rounded-[var(--radius)] bg-[var(--surface)]" />
-          ) : (
-            <SeatMap
-              seats={seats}
-              selectedSeatIds={selected}
-              onSeatToggle={toggle}
-              mode={isCancelled ? 'view' : 'select'}
-            />
-          )}
-        </div>
-      </div>
+            <div className="flex-1 overflow-auto px-5 py-10 sm:px-8">
+              <div className="mx-auto max-w-5xl">
+                {isCancelled && (
+                  <p className="mb-8 rounded-[var(--radius-sm)] bg-[var(--err-bg)] px-4 py-3 text-[14px] text-[var(--err)]">
+                    Сеанс отменён.
+                  </p>
+                )}
+                {error && <p className="mb-8 text-[14px] text-[var(--err)]">{error}</p>}
+                {isLoading ? (
+                  <div className="skeleton mx-auto h-72 max-w-2xl rounded-[var(--radius)]" />
+                ) : (
+                  <div className="anim-rise" style={{ '--rise': '12px', '--delay': '150ms' }}>
+                    <SeatMap
+                      seats={seats}
+                      selectedSeatIds={selected}
+                      onSeatToggle={toggle}
+                      mode={isCancelled ? 'view' : 'select'}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
 
-      <footer className="border-t border-[var(--border)] bg-[var(--surface)] px-5 py-4 sm:px-8">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4">
-          <p className="text-sm">
-            <span className="text-[var(--muted)]">Выбрано:</span>{' '}
-            <strong>{pluralize(selected.length, 'место', 'места', 'мест')}</strong>
-            <span className="mx-2 text-[var(--muted2)]">·</span>
-            <span className="text-[var(--muted)]">Итого:</span>{' '}
-            <strong className="font-mono2">{total ? formatPrice(total) : 'бесплатно'}</strong>
-          </p>
-          <Button onClick={purchase} disabled={!selected.length || isCancelled} loading={buy.isPending}>
-            Купить
-            <ArrowRight size={15} />
-          </Button>
-        </div>
-      </footer>
-    </div>,
+            <footer className="border-t border-[var(--border)] bg-[var(--surface)]">
+              <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
+                <div className="flex items-baseline gap-8">
+                  <div>
+                    <p className="t-label">Выбрано</p>
+                    <p className="t-num mt-1.5 text-[16px] text-[var(--text)]">
+                      {pluralize(selected.length, 'место', 'места', 'мест')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="t-label">Итого</p>
+                    <p className="t-poster t-num mt-1 text-[30px] leading-none text-[var(--text)]">
+                      {total ? formatPrice(total) : 'бесплатно'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="lg"
+                  onClick={purchase}
+                  disabled={!selected.length || isCancelled}
+                  loading={buy.isPending}
+                >
+                  Купить
+                  <ArrowRight size={16} strokeWidth={1.75} />
+                </Button>
+              </div>
+            </footer>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   )
 }

@@ -1,10 +1,11 @@
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
 # Aliased for the one annotation that cannot use the plain name: a field
 # called "datetime" with a default binds that name in its own class body,
 # and the annotation next to it would then resolve to the default instead
 # of the type.
 from datetime import datetime as datetime_type
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -39,10 +40,14 @@ class RecurringRule(BaseModel):
     end_count: int | None = Field(default=None, ge=1, le=MAX_RECURRING_SESSIONS)
     # Minutes east of UTC for the person filling in the form. The times above
     # are wall clock, and without this the server would read them as UTC and
-    # file every showing at the wrong hour. One offset for the whole range
-    # ignores a daylight-saving change inside it; the zones this runs in keep
-    # a fixed offset all year.
+    # file every showing at the wrong hour.
     tz_offset_minutes: int = Field(default=0, ge=-840, le=840)
+    # The same person's time zone by name ("Europe/Berlin"), when the browser
+    # says. With it each date gets the offset it actually has, so a series
+    # across a daylight-saving change keeps its showings at the wall-clock time
+    # asked for; one offset -- today's -- moved everything after the change by
+    # an hour. The offset above stays the fallback.
+    tz_name: str | None = Field(default=None, max_length=64)
 
     @field_validator("days_of_week")
     @classmethod
@@ -77,9 +82,21 @@ class RecurringRule(BaseModel):
             raise ValueError("Укажите количество сеансов в серии")
         return self
 
+    def zone(self) -> tzinfo:
+        """The rule's time zone: the named one if this server knows it, else the
+        fixed offset. Python's zone database comes from the OS -- or, on
+        Windows, from the optional tzdata package -- so a name can be unknown
+        here; that must not turn into a refused request."""
+        if self.tz_name:
+            try:
+                return ZoneInfo(self.tz_name)
+            except Exception:  # ZoneInfoNotFoundError, a malformed key, no tzdata
+                pass
+        return timezone(timedelta(minutes=self.tz_offset_minutes))
+
     def expand(self) -> list[datetime]:
         """Every moment the rule describes, in chronological order."""
-        zone = timezone(timedelta(minutes=self.tz_offset_minutes))
+        zone = self.zone()
         days = set(self.days_of_week)
         clock = [time(int(item[:2]), int(item[3:])) for item in self.times]
 

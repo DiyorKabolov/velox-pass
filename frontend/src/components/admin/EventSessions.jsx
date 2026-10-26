@@ -53,7 +53,7 @@ export default function EventSessions({ eventId }) {
   })
 
   if (isLoading) {
-    return <div className="h-24 animate-pulse rounded-[var(--radius-sm)] bg-[var(--surface2)]" />
+    return <div className="h-24 skeleton rounded-[var(--radius-sm)]" />
   }
 
   if (!sessions?.length) {
@@ -73,7 +73,7 @@ export default function EventSessions({ eventId }) {
               (title, index) => (
                 <th
                   key={title || index}
-                  className={`border-b border-[var(--border)] px-3 py-2 font-mono2 text-[10px] uppercase tracking-[0.14em] ${
+                  className={`border-b border-[var(--border)] px-3 py-2 t-label ${
                     index >= 2 && index <= 3 ? 'text-right' : ''
                   } ${index === 5 ? 'text-right' : ''}`}
                 >
@@ -105,7 +105,7 @@ export default function EventSessions({ eventId }) {
                 </Cell>
                 <Cell>
                   <span
-                    className="rounded-full px-2 py-0.5 text-[10px] whitespace-nowrap"
+                    className="rounded-[3px] px-1.5 py-[3px] text-[10.5px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap"
                     style={{ background: state.bg, color: state.color }}
                   >
                     {state.label}

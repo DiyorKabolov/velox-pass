@@ -38,11 +38,20 @@ export default function Avatar({ username, src, size = 40, className = '' }) {
     )
   }
 
+  // Muted and a touch warm, so a column of avatars reads as a set of inks on
+  // the dark page rather than as a row of sweets.
+  const hue = hueOf(username)
   return (
     <span
       aria-label={username}
-      className={`inline-flex shrink-0 select-none items-center justify-center rounded-full font-medium text-white ${className}`}
-      style={{ ...box, background: `hsl(${hueOf(username)} 42% 40%)` }}
+      className={`inline-flex shrink-0 select-none items-center justify-center rounded-full font-display font-bold uppercase leading-none ${className}`}
+      style={{
+        ...box,
+        fontSize: Math.round(size * 0.42),
+        background: `hsl(${hue} 28% 24%)`,
+        color: `hsl(${hue} 55% 82%)`,
+        boxShadow: `inset 0 0 0 1px hsl(${hue} 30% 34%)`,
+      }}
     >
       {initialsOf(username)}
     </span>

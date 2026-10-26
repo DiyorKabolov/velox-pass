@@ -1,15 +1,20 @@
-"""Fill the database with realistic Russian demo data.
+"""Wipe the demo content and fill the database with a cinema season.
 
-    python seed_demo.py            # wipe demo content, then reseed
-    python seed_demo.py --keep     # add without deleting anything
+    python seed_demo.py
 
-User accounts are never touched. Everything else (events, venues, halls,
-seats, sessions, prices, tickets) is replaced, so the script is safe to run
-again and again while building the UI.
+Three venues in Dushanbe, four halls with a full seat map, eight films and
+performances, a fortnight of showings with prices, and a handful of sold
+tickets -- enough for every screen of the app to have something real on it.
+
+Two things are never touched:
+
+* the users table, so nobody has to sign up again;
+* the event named in KEEP_TITLES, together with everything it hangs off --
+  its tickets, its venue and the grant that lets its administrator manage it.
 """
+import random
 import sys
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from sqlalchemy import create_engine, delete, select
 from sqlalchemy.orm import Session as OrmSession
@@ -17,332 +22,608 @@ from sqlalchemy.orm import Session as OrmSession
 from app.core.config import settings
 from app.models import (
     Event,
+    Friendship,
     Hall,
+    PdfTemplate,
     Seat,
     SeatPrice,
     Session,
     Ticket,
     User,
+    UserVenueRole,
     Venue,
 )
-from app.routers.venues import seats_for_layout
+from app.services.ticket_service import new_ticket_id
 
-NOW = datetime.now(timezone.utc)
+# The Windows console is cp1252 by default and every line below is Russian.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+# Showings are stored with an offset, and the site shows them in the reader's
+# own zone. Building them in the machine's zone means 21:00 here reads 21:00
+# on screen, which is the only way a cinema timetable makes sense.
+LOCAL_TZ = datetime.now().astimezone().tzinfo
+NOW = datetime.now(LOCAL_TZ)
+TODAY = NOW.date()
+
+MON, TUE, WED, THU, FRI, SAT, SUN = range(7)
+
+# Events whose title starts with one of these survive the wipe untouched.
+KEEP_TITLES = ("Осенний бал",)
+
+random.seed(20260917)
 
 
-def layout(rows: int, cols: int, *, vip_rows=0, balcony_rows=0, aisles=(), broken=()):
-    """Build a layout_json grid.
+# --------------------------------------------------------------------------
+# when things are on
+# --------------------------------------------------------------------------
+def moment(day, hour, minute=0):
+    return datetime(day.year, day.month, day.day, hour, minute, tzinfo=LOCAL_TZ)
 
-    vip_rows count from the front, balcony_rows from the back, `aisles` lists
-    1-based columns that are gaps, and `broken` holds (row, col) seats marked
-    unavailable.
+
+def schedule(weekdays, times, *, days):
+    """Every showing on those weekdays at those times within the next `days`.
+
+    Today counts, but only the times that have not already passed: a timetable
+    offering this morning's ten o'clock would be a broken page, not a demo.
     """
-    grid = []
-    for r in range(1, rows + 1):
-        row = []
-        for c in range(1, cols + 1):
-            if c in aisles:
-                row.append({"category": "standard", "is_aisle": True})
-                continue
-            if (r, c) in broken:
-                category = "disabled"
-            elif r <= vip_rows:
-                category = "vip"
-            elif r > rows - balcony_rows:
-                category = "balcony"
-            else:
-                category = "standard"
-            row.append({"category": category, "is_aisle": False})
-        grid.append(row)
-    return {"seats": grid}
+    out = []
+    for offset in range(days + 1):
+        day = TODAY + timedelta(days=offset)
+        if day.weekday() not in weekdays:
+            continue
+        for hour, minute in times:
+            when = moment(day, hour, minute)
+            if when > NOW:
+                out.append(when)
+    return sorted(out)
 
+
+def next_weekdays(weekday, count, hour, minute=0):
+    """The next `count` Saturdays (or whichever day), starting from tomorrow."""
+    out = []
+    day = TODAY + timedelta(days=1)
+    while len(out) < count:
+        if day.weekday() == weekday:
+            out.append(moment(day, hour, minute))
+        day += timedelta(days=1)
+    return out
+
+
+# --------------------------------------------------------------------------
+# what there is
+# --------------------------------------------------------------------------
+CINEMA_PRICES = {"standard": 50, "vip": 90}
+THEATER_PRICES = {"standard": 80, "balcony": 120}
 
 VENUES = [
     {
-        "name": "Театр имени Вахтангова",
-        "type": "theater",
-        "address": "Москва, ул. Арбат, 26",
-        "halls": [
-            {
-                "name": "Основная сцена",
-                "layout": layout(10, 16, vip_rows=2, balcony_rows=2,
-                                 aisles=(6, 11), broken=((5, 1), (5, 16))),
-            },
-            {"name": "Малая сцена", "layout": layout(6, 10, vip_rows=1, aisles=(6,))},
-        ],
-    },
-    {
-        "name": "Кинотеатр «Октябрь»",
+        "key": "ватан",
+        "name": "Кинотеатр «Ватан»",
         "type": "cinema",
-        "address": "Москва, Новый Арбат, 24",
-        "halls": [
-            {"name": "Зал 1 · IMAX", "layout": layout(8, 14, vip_rows=0,
-                                                      balcony_rows=2, aisles=(5, 11))},
-            {"name": "Зал 2", "layout": layout(6, 10, aisles=(6,))},
-        ],
-    },
-    {
-        "name": "Концертный зал «Зарядье»",
-        "type": "concert",
-        "address": "Москва, ул. Варварка, 6",
+        "address": "г. Душанбе, пр. Рудаки, 33",
+        "description": "Старейший кинотеатр столицы: два зала, цифровая проекция и звук Dolby.",
         "halls": [
             {
                 "name": "Большой зал",
-                "layout": layout(12, 18, vip_rows=3, balcony_rows=3, aisles=(7, 13)),
+                "rows": 10,
+                "cols": 16,
+                # (first row, last row, category), rows counted from the screen.
+                "bands": [(1, 8, "standard"), (9, 10, "vip")],
+                "prices": CINEMA_PRICES,
+            },
+            {
+                "name": "Малый зал",
+                "rows": 6,
+                "cols": 10,
+                "bands": [(1, 6, "standard")],
+                "prices": CINEMA_PRICES,
+            },
+        ],
+    },
+    {
+        "key": "садбарг",
+        "name": "Кинотеатр «Садбарг»",
+        "type": "cinema",
+        "address": "г. Душанбе, ул. Айни, 14",
+        "description": "Уютный зал в центре города, авторское кино и повторные показы.",
+        "halls": [
+            {
+                "name": "Зал 1",
+                "rows": 8,
+                "cols": 12,
+                "bands": [(1, 6, "standard"), (7, 8, "vip")],
+                "prices": CINEMA_PRICES,
+            },
+        ],
+    },
+    {
+        "key": "лахути",
+        "name": "Театр имени Лахути",
+        "type": "theater",
+        "address": "г. Душанбе, пр. Рудаки, 28",
+        "description": "Академический драматический театр, основан в 1929 году.",
+        "halls": [
+            {
+                "name": "Главная сцена",
+                "rows": 12,
+                "cols": 20,
+                "bands": [(1, 10, "standard"), (11, 12, "balcony")],
+                "prices": THEATER_PRICES,
             },
         ],
     },
 ]
 
 
-# hall = "Venue :: Hall" for seated events; None means general admission.
 EVENTS = [
     {
-        "title": "«Евгений Онегин»",
-        "description": "Опера в трёх действиях. Постановка идёт с одним антрактом.",
-        "date": NOW + timedelta(days=9, hours=3),
-        "location": "Театр имени Вахтангова",
-        "capacity": 0,
-        "hall": "Театр имени Вахтангова :: Основная сцена",
-        "colors": ("#fdfdf5", "#a898e0", "#2a2a2a"),
-        "prices": {"vip": 6500, "standard": 3200, "balcony": 1800},
+        "title": "Дюна: Часть третья",
+        "description": (
+            "Пол Атрейдес продолжает своё путешествие по пустынным просторам Арракиса. "
+            "Объединив фрименов под своим знаменем, он готовится к финальному "
+            "противостоянию с Домом Харконненов. Эпическая космическая сага достигает "
+            "своей кульминации."
+        ),
+        "venue": "ватан",
+        "hall": "Большой зал",
+        "colors": ("#fdfdf5", "#c084fc", "#1a0a2e"),
+        "tags": ["кино", "фантастика"],
+        "when": lambda: schedule(
+            {MON, WED, FRI, SAT, SUN}, [(10, 0), (14, 0), (17, 30), (21, 0)], days=14
+        ),
     },
     {
-        "title": "Балет «Щелкунчик»",
-        "description": "Новогодняя классика для всей семьи. Продолжительность 2 часа.",
-        "date": NOW + timedelta(days=23, hours=5),
-        "location": "Театр имени Вахтангова",
-        "capacity": 0,
-        "hall": "Театр имени Вахтангова :: Основная сцена",
-        "colors": ("#f6f1f6", "#8d6ea8", "#2b2430"),
-        "prices": {"vip": 8000, "standard": 4500, "balcony": 2200},
+        "title": "Человек-паук: Новое поколение 2",
+        "description": (
+            "Майлз Моралес возвращается в новом приключении, которое охватит сразу "
+            "несколько вселенных. Анимационный шедевр от Sony Pictures с уникальным "
+            "визуальным стилем, покорившим зрителей всего мира."
+        ),
+        "venue": "ватан",
+        "hall": "Большой зал",
+        "colors": ("#fdf5f5", "#f87171", "#2a0a0a"),
+        "tags": ["кино", "анимация"],
+        "when": lambda: schedule({TUE, THU, SAT, SUN}, [(11, 0), (15, 0), (19, 0)], days=14),
     },
     {
-        "title": "«Дюна: Часть третья»",
-        "description": "Премьера в IMAX. Продолжительность 2 часа 46 минут, 12+.",
-        "date": NOW + timedelta(days=3, hours=6),
-        "location": "Кинотеатр «Октябрь»",
-        "capacity": 0,
-        "hall": "Кинотеатр «Октябрь» :: Зал 1 · IMAX",
-        "colors": ("#eef2f8", "#4a6fa5", "#1e2733"),
-        "prices": {"standard": 750, "balcony": 550},
+        "title": "Интерстеллар — возвращение",
+        "description": (
+            "Специальный повторный показ культового фильма Кристофера Нолана в формате "
+            "IMAX. Путешествие сквозь червоточину к далёким галактикам в поисках нового "
+            "дома для человечества."
+        ),
+        "venue": "ватан",
+        "hall": "Малый зал",
+        "colors": ("#f5f8fd", "#60a5fa", "#0a1428"),
+        "tags": ["кино", "фантастика"],
+        "when": lambda: schedule({FRI, SAT}, [(20, 0)], days=14),
     },
     {
-        "title": "Чайковский. Симфония №5",
-        "description": "Академический оркестр под управлением приглашённого дирижёра.",
-        "date": NOW + timedelta(days=16, hours=4),
-        "location": "Концертный зал «Зарядье»",
-        "capacity": 0,
-        "hall": "Концертный зал «Зарядье» :: Большой зал",
-        "colors": ("#fbf3e8", "#c9922f", "#33241a"),
-        "prices": {"vip": 9000, "standard": 4000, "balcony": 2500},
+        "title": "Мастер и Маргарита",
+        "description": (
+            "Экранизация бессмертного романа Михаила Булгакова. Москва 1930-х годов. "
+            "Загадочный иностранец по имени Воланд появляется в городе и переворачивает "
+            "жизнь его обитателей с ног на голову."
+        ),
+        "venue": "садбарг",
+        "hall": "Зал 1",
+        "colors": ("#fdfaf0", "#f59e0b", "#1a1000"),
+        "tags": ["кино", "драма"],
+        "when": lambda: schedule({MON, WED, THU, FRI}, [(12, 0), (16, 0), (20, 0)], days=14),
     },
     {
-        "title": "Стендап: открытый микрофон",
-        "description": "Восемь комиков, новый материал. Вход свободный, 18+.",
-        "date": NOW + timedelta(days=5, hours=11),
-        "location": "Клуб «Подвал»",
-        "capacity": 90,
+        "title": "Гарри Поттер и Тайная комната",
+        "description": (
+            "Специальный показ в честь юбилея франшизы. Второй год в Хогвартсе обещает "
+            "быть ещё более захватывающим: загадочные нападения на учеников, говорящий "
+            "змей и тайная комната, которую все боятся открыть."
+        ),
+        "venue": "садбарг",
+        "hall": "Зал 1",
+        "colors": ("#f0fdf4", "#4ade80", "#0a1a0a"),
+        "tags": ["кино"],
+        "when": lambda: schedule({SAT, SUN}, [(10, 0), (13, 0), (16, 0)], days=14),
+    },
+    {
+        "title": "Чайка — спектакль А.П. Чехова",
+        "description": (
+            "Режиссёр Марина Хасанова представляет новое прочтение классической пьесы "
+            "Антона Павловича Чехова. История о любви, творчестве и несбыточных мечтах "
+            "в исполнении труппы театра имени Лахути."
+        ),
+        "venue": "лахути",
+        "hall": "Главная сцена",
+        "colors": ("#fdfdf5", "#a898e0", "#1a1428"),
+        "tags": ["театр", "драма"],
+        "when": lambda: sorted(
+            schedule({FRI, SAT}, [(19, 0)], days=28) + schedule({SUN}, [(17, 0)], days=28)
+        ),
+    },
+    {
+        "title": "Лебединое озеро",
+        "description": (
+            "Балетный спектакль в постановке Государственного академического театра "
+            "оперы и балета Таджикистана. Музыка Чайковского, классическая хореография "
+            "и великолепные костюмы создают незабываемое зрелище."
+        ),
+        "venue": "лахути",
+        "hall": "Главная сцена",
+        "colors": ("#fdf5fd", "#e879f9", "#1a001a"),
+        "tags": ["театр", "балет"],
+        "when": lambda: next_weekdays(SAT, 3, 18),
+    },
+    {
+        "title": "Стендап-вечер: Открытый микрофон",
+        "description": (
+            "Ежемесячный вечер стендап-комедии в Душанбе. На сцену выходят как опытные "
+            "комики, так и новички. Живая атмосфера, искренний смех и истории из жизни. "
+            "Вход свободный, места ограничены."
+        ),
+        "venue": "садбарг",
         "hall": None,
-        "colors": ("#fdf3f2", "#d1544c", "#2e1f1e"),
-    },
-    {
-        "title": "Ночь музеев",
-        "description": "Экскурсия с куратором по залам современного искусства.",
-        "date": NOW + timedelta(days=12, hours=2),
-        "location": "Городской музей искусств",
-        "capacity": 25,
-        "hall": None,
-        "colors": ("#f4f7f2", "#5fa86b", "#1f2a20"),
-    },
-    {
-        "title": "Лекция «История джаза»",
-        "description": "От Нового Орлеана до современного фьюжна. Полтора часа.",
-        "date": NOW + timedelta(days=30, hours=7),
-        "location": "Библиотека имени Некрасова",
-        "capacity": 120,
-        "hall": None,
-        "colors": ("#f2f2f2", "#4a4a4a", "#1f1f1f"),
-    },
-    {
-        "title": "Новогодний гала-концерт",
-        "description": "Мероприятие уже прошло — оставлено для проверки истёкших билетов.",
-        "date": NOW - timedelta(days=11),
-        "location": "Концертный зал «Зарядье»",
-        "capacity": 400,
-        "hall": None,
-        "colors": ("#f7f3ee", "#b08968", "#2c2420"),
+        "capacity": 80,
+        "colors": ("#fdfdf5", "#f97316", "#1a0800"),
+        "tags": ["стендап"],
+        "when": lambda: next_weekdays(FRI, 1, 20),
     },
 ]
 
 
-def wipe(db: OrmSession) -> None:
-    """Remove demo content. Users are deliberately left alone."""
-    # Child rows first: the FKs are ON DELETE SET NULL, not CASCADE, for some.
-    for model in (Ticket, SeatPrice, Session, Seat, Hall, Venue, Event):
-        db.execute(delete(model))
+# --------------------------------------------------------------------------
+# clearing out
+# --------------------------------------------------------------------------
+def protected(db):
+    """Ids of everything the wipe must leave alone, keyed by table."""
+    events = set()
+    for title in KEEP_TITLES:
+        rows = db.execute(select(Event.id).where(Event.title.ilike(f"{title}%"))).scalars()
+        events.update(rows)
+    if not events:
+        return {"events": set(), "sessions": set(), "halls": set(), "venues": set()}
+
+    sessions = set(
+        db.execute(select(Session.id).where(Session.event_id.in_(events))).scalars()
+    )
+    # A kept event may hang off a hall through its own showings, and off a
+    # venue through either the hall or the event row itself.
+    halls = set(
+        db.execute(
+            select(Session.hall_id).where(
+                Session.id.in_(sessions), Session.hall_id.is_not(None)
+            )
+        ).scalars()
+    )
+    venues = set(
+        db.execute(
+            select(Event.venue_id).where(
+                Event.id.in_(events), Event.venue_id.is_not(None)
+            )
+        ).scalars()
+    )
+    if halls:
+        venues.update(
+            db.execute(select(Hall.venue_id).where(Hall.id.in_(halls))).scalars()
+        )
+    return {"events": events, "sessions": sessions, "halls": halls, "venues": venues}
+
+
+def wipe(db, keep):
+    """Delete everything but the users and the protected event's own rows.
+
+    Child rows go first: several foreign keys are ON DELETE SET NULL rather
+    than CASCADE, and a blanked column is exactly the silent damage this is
+    meant to avoid.
+    """
+    def survives(column, kept):
+        return column.not_in(kept) if kept else None
+
+    def erase(model, condition=None):
+        statement = delete(model) if condition is None else delete(model).where(condition)
+        return db.execute(statement).rowcount
+
+    counts = {
+        "цены": erase(SeatPrice, survives(SeatPrice.session_id, keep["sessions"])),
+        "билеты": erase(Ticket, survives(Ticket.event_id, keep["events"])),
+        "места": erase(Seat, survives(Seat.hall_id, keep["halls"])),
+        "сеансы": erase(Session, survives(Session.id, keep["sessions"])),
+        "залы": erase(Hall, survives(Hall.id, keep["halls"])),
+        "права на площадки": erase(
+            UserVenueRole, survives(UserVenueRole.venue_id, keep["venues"])
+        ),
+        "дружбы": erase(Friendship),
+        "шаблоны PDF": erase(PdfTemplate),
+        "мероприятия": erase(Event, survives(Event.id, keep["events"])),
+        "площадки": erase(Venue, survives(Venue.id, keep["venues"])),
+    }
     db.flush()
-    print("  очищено: билеты, сеансы, места, залы, площадки, мероприятия")
+    print("✓ Очищено: " + ", ".join(f"{name} {n}" for name, n in counts.items()))
+    if keep["events"]:
+        print(f"  сохранено нетронутым: мероприятий {len(keep['events'])}, "
+              f"площадок {len(keep['venues'])}")
 
 
-def build_venues(db: OrmSession) -> dict[str, Hall]:
-    """Create venues and halls, returning halls keyed by 'Venue :: Hall'."""
-    halls: dict[str, Hall] = {}
+# --------------------------------------------------------------------------
+# building up
+# --------------------------------------------------------------------------
+def build_venues(db):
+    """Venues, halls and every seat of every hall."""
+    venues, halls, seats_made = {}, {}, 0
+
     for spec in VENUES:
-        venue = Venue(name=spec["name"], type=spec["type"], address=spec["address"])
+        venue = Venue(
+            name=spec["name"],
+            type=spec["type"],
+            address=spec["address"],
+            description=spec["description"],
+        )
         db.add(venue)
         db.flush()
+        venues[spec["key"]] = venue
 
         for hall_spec in spec["halls"]:
-            grid = hall_spec["layout"]["seats"]
+            rows, cols = hall_spec["rows"], hall_spec["cols"]
+
+            def category_of(row, bands=hall_spec["bands"]):
+                for first, last, category in bands:
+                    if first <= row <= last:
+                        return category
+                return "standard"
+
+            # The grid mirrors the seats below: it is what the hall editor
+            # draws, so the two must say the same thing about every cell.
+            grid = [
+                [{"category": category_of(row), "is_aisle": False} for _ in range(cols)]
+                for row in range(1, rows + 1)
+            ]
             hall = Hall(
                 venue_id=venue.id,
                 name=hall_spec["name"],
-                rows=len(grid),
-                cols=max(len(r) for r in grid),
-                layout_json=hall_spec["layout"],
+                rows=rows,
+                cols=cols,
+                layout_json={"seats": grid},
             )
             db.add(hall)
             db.flush()
 
-            seats = seats_for_layout(hall)
-            db.add_all(seats)
+            db.add_all(
+                Seat(
+                    hall_id=hall.id,
+                    row=row,
+                    col=col,
+                    label=f"{row}-{col}",
+                    category=category_of(row),
+                    is_aisle=False,
+                )
+                for row in range(1, rows + 1)
+                for col in range(1, cols + 1)
+            )
             db.flush()
 
-            halls[f"{venue.name} :: {hall.name}"] = hall
-            sellable = sum(1 for s in seats if not s.is_aisle)
-            print(f"  {venue.name} / {hall.name}: "
-                  f"{hall.rows}x{hall.cols}, мест в продаже {sellable}")
-    return halls
+            halls[(spec["key"], hall.name)] = hall
+            hall.prices = hall_spec["prices"]  # carried in memory, not a column
+            seats_made += rows * cols
+            print(f"  {venue.name} / {hall.name}: {rows}×{cols} = {rows * cols} мест")
+
+    print(f"✓ Создано {len(venues)} площадок, {len(halls)} залов, {seats_made} мест")
+    return venues, halls
 
 
-def build_events(db: OrmSession, halls: dict[str, Hall]) -> list[Session]:
-    """Create events, plus a session with prices for every seated one."""
-    sessions: list[Session] = []
+def venue_admins(db, venues):
+    """Give every venue administrator a venue again, and say who owns what.
+
+    The wipe took their grants with the old venues; without new ones their
+    dashboard would open on nothing at all.
+    """
+    owners = {}
+    superadmin = db.execute(
+        select(User).where(User.role == "superadmin").order_by(User.id)
+    ).scalars().first()
+
+    admins = db.execute(
+        select(User).where(User.role == "venue_admin").order_by(User.id)
+    ).scalars().all()
+    already = set(db.execute(select(UserVenueRole.user_id)).scalars())
+
+    free = [venue for venue in venues.values()]
+    for admin in admins:
+        if admin.id in already or not free:
+            continue
+        venue = free.pop(0)
+        db.add(UserVenueRole(user_id=admin.id, venue_id=venue.id, role="venue_admin"))
+        owners[venue.id] = admin.id
+        print(f"  {venue.name} → {admin.username}")
+    db.flush()
+
+    if owners:
+        print(f"✓ Назначено администраторов площадок: {len(owners)}")
+    return owners, superadmin.id if superadmin else None
+
+
+def build_events(db, venues, halls, owners, fallback_owner):
+    """Events, their showings and the price of every seat category."""
+    made = []
+    total_sessions = 0
+
     for spec in EVENTS:
-        bg, accent, text = spec["colors"]
+        venue = venues[spec["venue"]]
+        hall = halls[(spec["venue"], spec["hall"])] if spec["hall"] else None
+        times = spec["when"]()
+        if not times:
+            print(f"  {spec['title']}: ближайших сеансов нет, пропущено")
+            continue
+
+        background, accent, text = spec["colors"]
         event = Event(
             title=spec["title"],
             description=spec["description"],
-            date=spec["date"],
-            location=spec["location"],
-            capacity=spec["capacity"],
-            has_seats=bool(spec["hall"]),
-            card_bg=bg,
+            # The event's own date is the first showing: the poster and the
+            # "is it over" check both read it.
+            date=times[0],
+            location=venue.name,
+            capacity=spec.get("capacity", 0),
+            price=0,
+            has_seats=hall is not None,
+            venue_id=venue.id,
+            tags=spec["tags"],
+            created_by=owners.get(venue.id, fallback_owner),
+            card_bg=background,
             card_accent=accent,
             card_text=text,
         )
         db.add(event)
         db.flush()
 
-        if not spec["hall"]:
-            print(f"  {event.title} — без рассадки, мест {event.capacity or '∞'}")
-            continue
+        # One group id for the whole run, so the admin can see and cancel a
+        # series rather than thirty unrelated showings.
+        group = f"seed-{event.id}"
+        sessions = [
+            Session(
+                event_id=event.id,
+                hall_id=hall.id if hall else None,
+                datetime=when,
+                status="active",
+                recurring_group_id=group if len(times) > 1 else None,
+            )
+            for when in times
+        ]
+        db.add_all(sessions)
+        db.flush()
 
-        hall = halls[spec["hall"]]
-        session = Session(
-            event_id=event.id,
-            hall_id=hall.id,
-            datetime=event.date,
-            status="active",
+        if hall:
+            categories = {seat_category for _, _, seat_category in hall_bands(hall)}
+            for session in sessions:
+                for category in sorted(categories):
+                    price = hall.prices.get(category)
+                    if price is not None:
+                        db.add(
+                            SeatPrice(
+                                session_id=session.id, category=category, price=price
+                            )
+                        )
+            db.flush()
+
+        total_sessions += len(sessions)
+        made.append((event, sessions))
+        where = hall.name if hall else "без рассадки"
+        print(f"  {event.title}: сеансов {len(sessions)}, {where}, "
+              f"с {times[0]:%d.%m %H:%M} по {times[-1]:%d.%m %H:%M}")
+
+    print(f"✓ Создано {len(made)} мероприятий и {total_sessions} сеансов")
+    return made
+
+
+def hall_bands(hall):
+    """The (first, last, category) bands of a hall, read back from its grid."""
+    grid = (hall.layout_json or {}).get("seats") or []
+    bands = []
+    for index, row in enumerate(grid, start=1):
+        category = (row[0] or {}).get("category", "standard") if row else "standard"
+        if bands and bands[-1][2] == category:
+            bands[-1] = (bands[-1][0], index, category)
+        else:
+            bands.append((index, index, category))
+    return bands
+
+
+# --------------------------------------------------------------------------
+# tickets already sold
+# --------------------------------------------------------------------------
+def price_of(db, session_id, category):
+    row = db.execute(
+        select(SeatPrice.price).where(
+            SeatPrice.session_id == session_id, SeatPrice.category == category
         )
-        db.add(session)
-        db.flush()
-
-        for category, price in spec["prices"].items():
-            db.add(SeatPrice(session_id=session.id, category=category, price=price))
-        db.flush()
-
-        sessions.append(session)
-        print(f"  {event.title} — сеанс в «{hall.name}», "
-              f"цены {'/'.join(str(p) for p in spec['prices'].values())}")
-    return sessions
+    ).scalar_one_or_none()
+    return row or 0
 
 
-def build_tickets(db: OrmSession, sessions: list[Session]) -> None:
-    """Give the admin one ticket of each kind, so the cabinet shows all states."""
-    admin = db.execute(select(User).where(User.role == "superadmin")).scalars().first()
-    if not admin:
-        print("  суперадмина нет — билеты пропущены")
+def sell(db, session, seats, buyers, *, used):
+    for seat in seats:
+        db.add(
+            Ticket(
+                ticket_id=new_ticket_id(),
+                user_id=random.choice(buyers).id,
+                event_id=session.event_id,
+                session_id=session.id,
+                seat_id=seat.id if seat else None,
+                used=used,
+                used_at=NOW - timedelta(minutes=random.randint(5, 90)) if used else None,
+                price_paid=price_of(db, session.id, seat.category) if seat else 0,
+            )
+        )
+    db.flush()
+
+
+def build_tickets(db, made):
+    """A sold-out patch in the middle of one hall, and two lighter bookings."""
+    buyers = db.execute(select(User)).scalars().all()
+    if not buyers:
+        print("  пользователей нет — билеты пропущены")
         return
 
-    new_id = lambda: f"VP-{uuid.uuid4().hex[:12].upper()}"
-    made = []
+    by_title = {event.title: (event, sessions) for event, sessions in made}
+    sold = 0
 
-    # 1. Seated, still valid: first free non-aisle seat of the first session.
-    if sessions:
-        session = sessions[0]
-        seat = db.execute(
+    # "Дюна": the block in front of the projector, the earlier rows already
+    # scanned in, so the hall map shows taken seats and the admin shows revenue.
+    entry = by_title.get("Дюна: Часть третья")
+    if entry:
+        session = entry[1][0]
+        rows = db.execute(
             select(Seat)
-            .where(Seat.hall_id == session.hall_id, Seat.is_aisle.is_(False))
-            .order_by(Seat.row, Seat.col)
-        ).scalars().first()
-        price = db.execute(
-            select(SeatPrice).where(
-                SeatPrice.session_id == session.id, SeatPrice.category == seat.category
+            .where(
+                Seat.hall_id == session.hall_id,
+                Seat.row.between(5, 7),
+                Seat.col.between(6, 11),
             )
-        ).scalars().first()
-        db.add(Ticket(ticket_id=new_id(), user_id=admin.id, event_id=session.event_id,
-                      session_id=session.id, seat_id=seat.id, used=False,
-                      price_paid=price.price if price else 0))
-        made.append(f"с местом {seat.label} ({seat.category})")
+            .order_by(Seat.row, Seat.col)
+        ).scalars().all()
+        scanned = [seat for seat in rows if seat.row <= 6]
+        waiting = [seat for seat in rows if seat.row == 7]
+        sell(db, session, scanned, buyers, used=True)
+        sell(db, session, waiting, buyers, used=False)
+        sold += len(rows)
+        print(f"  {entry[0].title}: продано {len(rows)} мест "
+              f"(погашено {len(scanned)}), сеанс {session.datetime:%d.%m %H:%M}")
 
-    # 2. General admission, valid.
-    free = db.execute(
-        select(Event).where(Event.has_seats.is_(False), Event.date > NOW)
-        .order_by(Event.date)
-    ).scalars().first()
-    if free:
-        db.add(Ticket(ticket_id=new_id(), user_id=admin.id, event_id=free.id,
-                      used=False, price_paid=0))
-        made.append("без места, действующий")
+    # "Лебединое озеро": a scattered fifteen, so the map is not a neat block.
+    entry = by_title.get("Лебединое озеро")
+    if entry:
+        session = entry[1][0]
+        seats = db.execute(
+            select(Seat).where(Seat.hall_id == session.hall_id)
+        ).scalars().all()
+        chosen = random.sample(seats, min(15, len(seats)))
+        sell(db, session, chosen, buyers, used=False)
+        sold += len(chosen)
+        print(f"  {entry[0].title}: продано {len(chosen)} мест, "
+              f"сеанс {session.datetime:%d.%m %H:%M}")
 
-    # 3. Expired: the event has already happened.
-    past = db.execute(
-        select(Event).where(Event.date < NOW).order_by(Event.date.desc())
-    ).scalars().first()
-    if past:
-        db.add(Ticket(ticket_id=new_id(), user_id=admin.id, event_id=past.id,
-                      used=False, price_paid=0,
-                      created_at=past.date - timedelta(days=6)))
-        made.append("истёкший")
+    # The stand-up night has no seats, so its tickets are just admissions.
+    entry = by_title.get("Стендап-вечер: Открытый микрофон")
+    if entry:
+        session = entry[1][0]
+        sell(db, session, [None] * 12, buyers, used=False)
+        sold += 12
+        print(f"  {entry[0].title}: продано 12 входных билетов")
 
-    # 4. Already scanned, so the torn card is visible too.
-    if len(sessions) > 1:
-        session = sessions[1]
-        seat = db.execute(
-            select(Seat)
-            .where(Seat.hall_id == session.hall_id, Seat.is_aisle.is_(False))
-            .order_by(Seat.row.desc(), Seat.col.desc())
-        ).scalars().first()
-        db.add(Ticket(ticket_id=new_id(), user_id=admin.id, event_id=session.event_id,
-                      session_id=session.id, seat_id=seat.id, used=True,
-                      used_at=NOW - timedelta(hours=5), price_paid=0))
-        made.append(f"погашенный, место {seat.label}")
-
-    db.flush()
-    for line in made:
-        print(f"  билет: {line}")
+    print(f"✓ Создано {sold} билетов")
 
 
-def main() -> int:
-    keep = "--keep" in sys.argv
+def main():
     engine = create_engine(settings.sync_database_url, echo=False)
-
     with OrmSession(engine) as db:
-        print("Velox Pass — демо-данные")
-        if keep:
-            print("  режим --keep: существующие данные не трогаем")
-        else:
-            wipe(db)
-
-        halls = build_venues(db)
-        sessions = build_events(db, halls)
-        build_tickets(db, sessions)
+        print("Velox Pass — демо-данные кинотеатров\n")
+        keep = protected(db)
+        wipe(db, keep)
+        venues, halls = build_venues(db)
+        owners, superadmin = venue_admins(db, venues)
+        made = build_events(db, venues, halls, owners, superadmin)
+        build_tickets(db, made)
         db.commit()
-
     engine.dispose()
-    print("\nГотово. Откройте афишу и админку.")
+    print("\n✓ Демо-данные успешно загружены")
     return 0
 
 

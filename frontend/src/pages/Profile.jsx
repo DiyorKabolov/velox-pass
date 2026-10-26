@@ -13,27 +13,35 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Modal from '../components/ui/Modal'
+import { CONTAINER } from '../components/ui/Page'
+import { AnimatedNumber, Reveal } from '../components/motion/Motion'
 import { formatDate } from '../utils/dates'
 import { ticketStartsAt } from '../utils/eventState'
 import { STATE_LABELS, ticketState } from '../utils/ticketGroups'
 
+/** A block opened by a heading in capitals over a hairline; `action` hangs right. */
 function Panel({ title, action, children }) {
   return (
-    <section className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="font-display text-base tracking-tight">{title}</h2>
+    <section>
+      <div className="flex items-baseline justify-between gap-3 border-b border-[var(--border)] pb-3">
+        <h2 className="font-display text-[22px] font-bold uppercase leading-none text-[var(--text)]">
+          {title}
+        </h2>
         {action}
       </div>
-      {children}
+      <div className="pt-5">{children}</div>
     </section>
   )
 }
 
+/** A figure set large, the way a paper prints the number that matters. */
 function Stat({ label, value }) {
   return (
-    <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] px-4 py-4 text-center">
-      <p className="font-display text-2xl tracking-tight">{value}</p>
-      <p className="mt-1 text-xs text-[var(--muted)]">{label}</p>
+    <div className="py-7 pr-4 [&:not(:first-child)]:border-l [&:not(:first-child)]:border-[var(--border)] [&:not(:first-child)]:pl-5 sm:py-9 sm:[&:not(:first-child)]:pl-8">
+      <dd className="t-poster text-[clamp(48px,8vw,96px)] text-[var(--text)]">
+        <AnimatedNumber value={value} />
+      </dd>
+      <dt className="t-label mt-3">{label}</dt>
     </div>
   )
 }
@@ -78,16 +86,22 @@ function UsernameField() {
           setEditing(true)
         }}
         title="Изменить никнейм"
-        className="group inline-flex max-w-full items-center gap-2 text-left"
+        className="group inline-flex max-w-full items-end gap-3 text-left"
       >
-        <span className="truncate font-display text-2xl tracking-tight">{user?.username}</span>
-        <Pencil size={15} className="shrink-0 text-[var(--muted2)] transition-colors group-hover:text-[var(--accent)]" />
+        <span className="t-poster truncate pb-[0.04em] text-[clamp(52px,8vw,104px)] text-[var(--text)]">
+          {user?.username}
+        </span>
+        <Pencil
+          size={18}
+          strokeWidth={1.75}
+          className="mb-[0.6em] shrink-0 text-[var(--muted2)] transition-colors duration-200 group-hover:text-[var(--accent)]"
+        />
       </button>
     )
   }
 
   return (
-    <div className="flex max-w-sm items-center gap-2">
+    <div className="flex max-w-xl items-center gap-2">
       <input
         ref={input}
         value={value}
@@ -101,19 +115,18 @@ function UsernameField() {
             setValue(user?.username ?? '')
           }
         }}
-        className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--accent)] bg-[var(--surface2)] px-3 py-1.5 font-display text-xl text-[var(--text)] outline-none"
+        className="t-poster min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[var(--accent)] bg-[var(--surface)] px-3 pb-1 pt-2 text-[44px] text-[var(--text)] shadow-[0_0_0_3px_var(--accent-dim)] outline-none"
       />
-      <Button size="sm" loading={save.isPending} onClick={commit} aria-label="Сохранить никнейм">
-        <Check size={14} />
+      <Button loading={save.isPending} onClick={commit} aria-label="Сохранить никнейм">
+        <Check size={16} strokeWidth={2} />
       </Button>
       <Button
-        size="sm"
         variant="ghost"
         disabled={save.isPending}
         onClick={() => setEditing(false)}
         aria-label="Отменить"
       >
-        <X size={14} />
+        <X size={16} strokeWidth={1.75} />
       </Button>
     </div>
   )
@@ -173,7 +186,7 @@ function PasswordModal({ open, onClose }) {
         <Input label="Новый пароль" name="new-password" type="password" autoComplete="new-password" value={form.next} onChange={field('next')} />
         <Input label="Повторите новый пароль" name="confirm-password" type="password" autoComplete="new-password" value={form.confirm} onChange={field('confirm')} />
         {problem && (
-          <p role="alert" className="text-sm text-[var(--err)]">
+          <p role="alert" className="text-[14px] text-[var(--err)]">
             {problem}
           </p>
         )}
@@ -199,25 +212,33 @@ export default function Profile() {
     onError: (error) => toast.error(apiError(error, 'Не удалось загрузить фото')),
   })
 
-  const visited = new Set((tickets ?? []).filter((ticket) => ticket.used).map((ticket) => ticket.event_id))
-  const recent = [...(tickets ?? [])]
+  // The same tickets the cabinet shows: a gift still waiting for an answer
+  // sits with its recipient but is not theirs yet, so it is not counted here,
+  // listed among the recent ones, or taken as a visit.
+  const owned = (tickets ?? []).filter((ticket) => ticket.gift_status !== 'pending')
+  const visited = new Set(owned.filter((ticket) => ticket.used).map((ticket) => ticket.event_id))
+  const recent = [...owned]
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 5)
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-5 py-12">
-      <header className="flex flex-wrap items-center gap-5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-6">
+    <div className={`${CONTAINER} pt-10 sm:pt-14`}>
+      <Reveal
+        as="header"
+        distance={12}
+        className="grid gap-x-10 gap-y-6 border-b border-[var(--border)] pb-10 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end"
+      >
         <button
           type="button"
           onClick={() => fileInput.current?.click()}
           disabled={avatar.isPending}
           title="Загрузить фото"
           aria-label="Загрузить фото"
-          className="group relative shrink-0 rounded-full"
+          className="group relative w-fit shrink-0 rounded-full"
         >
-          <Avatar username={user?.username} src={user?.avatar_url} size={80} />
-          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
-            <Camera size={20} />
+          <Avatar username={user?.username} src={user?.avatar_url} size={120} />
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+            <Camera size={22} strokeWidth={1.75} />
           </span>
         </button>
         <input
@@ -232,67 +253,85 @@ export default function Profile() {
           }}
         />
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
+          <p className="t-label mb-3">Профиль</p>
           <UsernameField />
-          <p className="mt-1 truncate text-sm text-[var(--muted)]">{user?.email}</p>
-          <button
-            type="button"
-            onClick={() => setPasswordOpen(true)}
-            className="mt-2 inline-flex items-center gap-1.5 text-sm text-[var(--accent)] hover:underline"
-          >
-            <KeyRound size={14} /> Изменить пароль
-          </button>
+          <p className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-[14px] text-[var(--muted)]">
+            <span className="truncate">{user?.email}</span>
+            <button
+              type="button"
+              onClick={() => setPasswordOpen(true)}
+              className="t-link inline-flex items-center gap-1.5 text-[var(--text)]"
+            >
+              <KeyRound size={14} strokeWidth={1.75} /> Изменить пароль
+            </button>
+          </p>
         </div>
-      </header>
+      </Reveal>
 
-      <div className="grid grid-cols-3 gap-3">
-        <Stat label="Билетов получено" value={tickets?.length ?? 0} />
+      <Reveal as="dl" delay={0.12} className="grid grid-cols-3 border-b border-[var(--border)]">
+        <Stat label="Билетов получено" value={owned.length} />
         <Stat label="Друзей" value={friends?.length ?? 0} />
         <Stat label="Мероприятий посещено" value={visited.size} />
-      </div>
+      </Reveal>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <Reveal delay={0.22} className="mt-14 grid gap-14 md:grid-cols-2 md:gap-12">
         <Panel
           title="Друзья"
           action={
-            <Link to="/friends" className="text-sm text-[var(--accent)] hover:underline">
-              Все друзья →
+            <Link
+              to="/cabinet?tab=friends"
+              className="t-link text-[14px] text-[var(--muted)] hover:text-[var(--text)]"
+            >
+              Все друзья
             </Link>
           }
         >
           {friends?.length ? (
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-4">
               {friends.slice(0, 6).map((friend) => (
-                <div key={friend.user_id} className="flex w-16 flex-col items-center gap-1.5" title={friend.username}>
-                  <Avatar username={friend.username} src={friend.avatar_url} size={48} />
-                  <span className="w-full truncate text-center text-[11px] text-[var(--muted)]">
+                <div
+                  key={friend.user_id}
+                  className="flex w-[72px] flex-col items-center gap-2"
+                  title={friend.username}
+                >
+                  <Avatar username={friend.username} src={friend.avatar_url} size={56} />
+                  <span className="w-full truncate text-center text-[12px] text-[var(--muted)]">
                     {friend.username}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-[var(--muted)]">Друзей пока нет.</p>
+            <p className="text-[15px] text-[var(--muted)]">Друзей пока нет.</p>
           )}
         </Panel>
 
         <Panel
           title="Последние билеты"
           action={
-            <Link to="/cabinet" className="text-sm text-[var(--accent)] hover:underline">
-              Все билеты →
+            <Link
+              to="/cabinet"
+              className="t-link text-[14px] text-[var(--muted)] hover:text-[var(--text)]"
+            >
+              Все билеты
             </Link>
           }
         >
           {recent.length ? (
-            <ul className="divide-y divide-[var(--border)]">
+            <ul className="-mt-2">
               {recent.map((ticket) => {
                 const state = ticketState(ticket)
                 return (
-                  <li key={ticket.id} className="flex items-center gap-3 py-2.5">
+                  <li
+                    key={ticket.id}
+                    className="flex items-center gap-4 border-b border-[var(--border)] py-3 last:border-b-0"
+                  >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm">{ticket.event_title}</p>
-                      <p className="text-xs text-[var(--muted2)]">{formatDate(ticketStartsAt(ticket))}</p>
+                      <p className="truncate text-[15px] text-[var(--text)]">{ticket.event_title}</p>
+                      <p className="t-num mt-0.5 text-[13px] text-[var(--muted2)]">
+                        {formatDate(ticketStartsAt(ticket))}
+                      </p>
                     </div>
                     <Badge tone={state}>{STATE_LABELS[state]}</Badge>
                   </li>
@@ -300,10 +339,10 @@ export default function Profile() {
               })}
             </ul>
           ) : (
-            <p className="text-sm text-[var(--muted)]">Билетов пока нет.</p>
+            <p className="text-[15px] text-[var(--muted)]">Билетов пока нет.</p>
           )}
         </Panel>
-      </div>
+      </Reveal>
 
       <PasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </div>

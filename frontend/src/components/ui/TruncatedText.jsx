@@ -159,7 +159,7 @@ export default function TruncatedText({ text, maxLines = 1, className = '' }) {
           <div
             ref={popupRef}
             role="tooltip"
-            className="fixed z-[100] rounded-lg bg-[#22252a] px-3 py-2 text-[13px] leading-snug text-white shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
+            className="fixed z-[100] rounded-[var(--radius-sm)] bg-[#1f1d1a] px-3 py-2 font-sans text-[13px] font-normal normal-case leading-snug tracking-normal text-[#f1ece3] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.6)]"
             style={{
               left: placement.left,
               top: placement.top,
@@ -170,7 +170,7 @@ export default function TruncatedText({ text, maxLines = 1, className = '' }) {
             {value}
             <span
               aria-hidden
-              className="absolute h-2.5 w-2.5 rotate-45 bg-[#22252a]"
+              className="absolute h-2.5 w-2.5 rotate-45 bg-[#1f1d1a]"
               style={{
                 left: placement.arrow - 5,
                 [placement.above ? 'bottom' : 'top']: -4,

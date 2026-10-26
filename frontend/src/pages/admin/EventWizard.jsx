@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ArrowRight, Check, ChevronRight } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { ArrowLeft, ArrowRight, Armchair, CalendarDays, Check, Repeat } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { apiError } from '../../api/client'
@@ -13,6 +14,7 @@ import { formatSessionStamp } from '../../utils/dates'
 import { pluralize } from '../../utils/plural'
 import { formatPrice } from '../../utils/ticketGroups'
 import Button from '../../components/ui/Button'
+import { CONTAINER, PageHeader } from '../../components/ui/Page'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import SeatMap from '../../components/seats/SeatMap'
@@ -34,9 +36,12 @@ import {
   validateStep,
 } from '../../components/admin/wizardForm'
 
+// Drawn marks for the three kinds of event, in place of emoji.
+const KIND_ICONS = { single: CalendarDays, hall: Armchair, series: Repeat }
+
 function Caption({ children }) {
   return (
-    <span className="mb-1.5 block text-xs uppercase tracking-[0.12em] text-[var(--muted)]">
+    <span className="t-label mb-2 block">
       {children}
     </span>
   )
@@ -51,44 +56,47 @@ function Field({ label, children }) {
   )
 }
 
-/** ① Информация → ② Тип → … Steps already behind can be clicked back to. */
+/** 01 Информация · 02 Тип · … Steps already behind can be clicked back to. */
 function Progress({ step, onJump }) {
   return (
-    <ol className="mb-10 flex flex-wrap items-center gap-2">
+    <ol className="mb-12 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--border)] sm:grid-cols-4">
       {STEPS.map((label, index) => {
         const done = index < step
         const current = index === step
         return (
-          <li key={label} className="flex items-center gap-2">
+          <li key={label} className="bg-[var(--bg)]">
             <button
               type="button"
               disabled={!done}
               onClick={() => onJump(index)}
               aria-current={current ? 'step' : undefined}
               className={[
-                'flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition-colors duration-150',
+                'relative flex w-full items-baseline gap-3 px-4 py-4 text-left transition-colors duration-200 disabled:cursor-default',
                 current
-                  ? 'border-[var(--accent)] bg-[var(--accent-dim)] text-[var(--text)]'
+                  ? 'text-[var(--text)]'
                   : done
-                    ? 'border-[var(--border2)] text-[var(--text)] hover:border-[var(--accent)]'
-                    : 'border-[var(--border)] text-[var(--muted2)]',
+                    ? 'text-[var(--text)] hover:bg-[var(--surface)]'
+                    : 'text-[var(--muted2)]',
               ].join(' ')}
             >
               <span
-                className={[
-                  'flex h-5 w-5 items-center justify-center rounded-full font-mono2 text-[10px]',
-                  current || done
-                    ? 'bg-[var(--accent)] text-[var(--bg)]'
-                    : 'bg-[var(--surface2)] text-[var(--muted)]',
-                ].join(' ')}
+                className="t-poster t-num text-[28px] leading-none"
+                style={{ color: current ? 'var(--accent)' : undefined }}
               >
-                {done ? <Check size={11} strokeWidth={3} /> : index + 1}
+                {String(index + 1).padStart(2, '0')}
               </span>
-              {label}
+              <span className="text-[14px]">{label}</span>
+              {done && (
+                <Check size={14} strokeWidth={2.25} className="ml-auto self-center text-[var(--ok)]" />
+              )}
+              {current && (
+                <motion.span
+                  layoutId="wizard-step"
+                  transition={{ type: 'spring', stiffness: 480, damping: 40 }}
+                  className="absolute inset-x-0 bottom-0 h-[2px] bg-[var(--accent)]"
+                />
+              )}
             </button>
-            {index < STEPS.length - 1 && (
-              <ChevronRight size={14} className="text-[var(--muted2)]" />
-            )}
           </li>
         )
       })}
@@ -150,7 +158,7 @@ function InfoStep({ form, set }) {
             onChange={(event) => set({ description: event.target.value })}
             rows={4}
             placeholder="О чём мероприятие?"
-            className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none transition-all duration-150 placeholder:text-[var(--muted2)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25"
+            className="w-full resize-y rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-sm text-[var(--text)] outline-none transition-all duration-150 placeholder:text-[var(--muted2)] focus:border-[var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-dim)]"
           />
         </Field>
         <TagPicker value={form.tags} onChange={(tags) => set({ tags })} />
@@ -167,7 +175,9 @@ function InfoStep({ form, set }) {
             onRemove={() => set({ image_file: null, image_url: null })}
           />
         </div>
-        <EventPreview form={form} />
+        {/* The wizard is a page, not a dialog: the preview stands on the
+            page colour, and the date may live outside form.date. */}
+        <EventPreview form={form} date={momentsOf(form)[0] ?? null} notch="var(--bg)" />
       </div>
     </div>
   )
@@ -180,6 +190,7 @@ function KindStep({ form, set }) {
     <div role="radiogroup" aria-label="Тип мероприятия" className="grid gap-4 md:grid-cols-3">
       {Object.entries(KINDS).map(([key, kind]) => {
         const selected = form.kind === key
+        const Icon = KIND_ICONS[key] ?? CalendarDays
         return (
           <button
             key={key}
@@ -188,18 +199,30 @@ function KindStep({ form, set }) {
             aria-checked={selected}
             onClick={() => set({ kind: key, recurring: key === 'hall' ? form.recurring : false })}
             className={[
-              'rounded-[var(--radius)] border p-6 text-left transition-all duration-150 active:scale-[0.99]',
+              'relative rounded-[var(--radius)] border p-6 text-left transition-[border-color,background-color,transform] duration-200 active:scale-[0.99]',
               selected
-                ? 'border-[var(--accent)] bg-[var(--accent-dim)] shadow-[0_0_0_1px_var(--accent)]'
-                : 'border-[var(--border)] bg-[var(--surface)] hover:border-[var(--border2)]',
+                ? 'border-[var(--text)] bg-[var(--surface2)]'
+                : 'border-[var(--border)] hover:border-[var(--border2)] hover:bg-[var(--surface)]',
             ].join(' ')}
           >
-            <span className="text-3xl" aria-hidden>
-              {kind.icon}
-            </span>
-            <p className="mt-4 font-display text-base tracking-tight">{kind.label}</p>
+            <Icon
+              size={28}
+              strokeWidth={1.5}
+              aria-hidden
+              className={selected ? 'text-[var(--accent)]' : 'text-[var(--muted)]'}
+            />
+            {selected && (
+              <Check
+                size={16}
+                strokeWidth={2.25}
+                className="absolute right-5 top-5 text-[var(--text)]"
+              />
+            )}
+            <p className="mt-6 font-display text-[24px] font-bold uppercase leading-none">
+              {kind.label}
+            </p>
             {kind.lines.map((line) => (
-              <p key={line} className="mt-1 text-sm text-[var(--muted)]">
+              <p key={line} className="mt-2 text-[14px] text-[var(--muted)]">
                 {line}
               </p>
             ))}
@@ -582,19 +605,27 @@ export default function EventWizard() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-5 py-12">
-      <nav
-        aria-label="Хлебные крошки"
-        className="mb-6 flex items-center gap-1.5 text-sm text-[var(--muted)]"
-      >
-        <Link to={returnTo} className="transition-colors duration-150 hover:text-[var(--text)]">
-          {fromVenuePanel ? 'Моя площадка' : 'Афиша'}
-        </Link>
-        <ChevronRight size={14} className="opacity-50" />
-        <span className="text-[var(--text)]">Новое мероприятие</span>
-      </nav>
-
-      <h1 className="mb-6 font-display text-2xl tracking-tight">Новое мероприятие</h1>
+    <div className={`${CONTAINER} pt-10 sm:pt-14`}>
+      <PageHeader
+        kicker={
+          <nav aria-label="Хлебные крошки" className="flex items-center gap-2">
+            <Link
+              to={returnTo}
+              className="transition-colors duration-200 hover:text-[var(--text)]"
+            >
+              {fromVenuePanel ? 'Моя площадка' : 'Афиша'}
+            </Link>
+            <span aria-hidden className="text-[var(--border2)]">
+              /
+            </span>
+            <span className="text-[var(--text)]">Новое мероприятие</span>
+          </nav>
+        }
+        title="Новое мероприятие"
+        size="md"
+        rule={false}
+        className="mb-10"
+      />
       <Progress step={step} onJump={setStep} />
 
       {step === 0 && <InfoStep form={form} set={set} />}
@@ -618,7 +649,7 @@ export default function EventWizard() {
       {step === 3 && (
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <Summary form={form} venue={venue} hall={hall} categories={categories} />
-          <EventPreview form={form} />
+          <EventPreview form={form} date={momentsOf(form)[0] ?? null} notch="var(--bg)" />
         </div>
       )}
 

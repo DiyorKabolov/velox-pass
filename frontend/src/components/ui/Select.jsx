@@ -96,15 +96,21 @@ export default function Select({
       close()
     }
     // The panel is fixed at the position it opened at, so anything that moves
-    // the trigger closes it rather than leaving it stranded.
+    // the trigger closes it rather than leaving it stranded. Listened for in
+    // the capture phase to catch scrolling containers too -- which includes
+    // the panel itself, and scrolling a long list of options must not shut it.
+    const onScroll = (event) => {
+      if (panelRef.current?.contains(event.target)) return
+      close()
+    }
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('touchstart', onPointerDown)
-    window.addEventListener('scroll', close, true)
+    window.addEventListener('scroll', onScroll, true)
     window.addEventListener('resize', close)
     return () => {
       document.removeEventListener('mousedown', onPointerDown)
       document.removeEventListener('touchstart', onPointerDown)
-      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('resize', close)
     }
   }, [open, close])
@@ -189,9 +195,10 @@ export default function Select({
         onKeyDown={onKeyDown}
         className={[
           'flex w-full items-center justify-between gap-2 rounded-[var(--radius-sm)]',
-          'border border-[var(--border)] bg-[var(--surface2)] px-3.5 py-2.5 text-left text-sm',
-          'outline-none transition-all duration-150',
-          'focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25',
+          'border bg-[var(--surface)] px-3.5 py-[11px] text-left text-[15px] leading-5',
+          'outline-none transition-[border-color,background-color,box-shadow] duration-200',
+          'focus-visible:border-[var(--accent)] focus-visible:shadow-[0_0_0_3px_var(--accent-dim)]',
+          open ? 'border-[var(--accent)] bg-[var(--surface2)]' : 'border-[var(--border)]',
           disabled
             ? 'cursor-not-allowed opacity-50'
             : 'cursor-pointer hover:border-[var(--border2)]',
@@ -202,7 +209,8 @@ export default function Select({
         <span className="truncate">{selected ? selected.label : placeholder}</span>
         <ChevronDown
           size={15}
-          className={`shrink-0 text-[var(--muted)] transition-transform duration-200 ${
+          strokeWidth={1.75}
+          className={`shrink-0 text-[var(--muted)] transition-transform duration-300 ease-out ${
             open ? 'rotate-180' : ''
           }`}
         />
@@ -216,15 +224,15 @@ export default function Select({
             id={listId}
             role="listbox"
             tabIndex={-1}
-            className="fixed z-[90] overflow-y-auto rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+            className="fixed z-[90] overflow-y-auto rounded-[var(--radius)] border border-[var(--border2)] bg-[var(--surface2)] p-1 shadow-[0_24px_48px_-16px_rgba(0,0,0,0.8)]"
             style={{
               left: rect.left,
               top: rect.top,
               bottom: rect.bottom,
               width: rect.width,
               maxHeight: rect.maxHeight,
-              // Grows out of the trigger rather than appearing at full size.
-              animation: 'velox-select-in 130ms cubic-bezier(0.22, 1, 0.36, 1)',
+              // Drops out of the trigger rather than appearing at full size.
+              animation: 'velox-select-in 180ms cubic-bezier(0.16, 1, 0.3, 1)',
               transformOrigin: rect.dropUp ? 'bottom center' : 'top center',
             }}
           >
@@ -239,14 +247,16 @@ export default function Select({
                   onMouseEnter={() => setActive(index)}
                   onClick={() => commit(index)}
                   className={[
-                    'flex cursor-pointer items-center justify-between gap-2 rounded-[6px]',
-                    'px-3 py-2 text-sm transition-colors duration-100',
-                    index === active ? 'bg-[var(--accent-dim)]' : '',
-                    isSelected ? 'text-[var(--accent)]' : 'text-[var(--text)]',
+                    'flex cursor-pointer items-center justify-between gap-2 rounded-[3px]',
+                    'px-3 py-2 text-[14px] transition-colors duration-100',
+                    index === active ? 'bg-[var(--surface3)]' : '',
+                    isSelected ? 'text-[var(--text)]' : 'text-[var(--muted)]',
                   ].join(' ')}
                 >
                   <span className="truncate">{option.label}</span>
-                  {isSelected && <Check size={14} className="shrink-0" />}
+                  {isSelected && (
+                    <Check size={14} strokeWidth={2.25} className="shrink-0 text-[var(--accent)]" />
+                  )}
                 </div>
               )
             })}
